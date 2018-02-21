@@ -24,6 +24,8 @@ class EventCallback(object):
         self._on_message_callback = _empty_callback
         self._on_subscribe_callback = _empty_callback
 
+        self._reconnect = True
+
     @property
     def on_subscribe(self):
         return self._on_subscribe_callback
@@ -84,7 +86,9 @@ class MqttPackageHandler(EventCallback):
 
     def _handle_packet(self, cmd, packet):
         logger.debug('[CMD %s] %s', hex(cmd), packet)
-        handler_name = '_handle_{}_packet'.format(MQTTCommands(cmd).name.lower())
+        cmd_type = cmd & 0xF0
+
+        handler_name = '_handle_{}_packet'.format(MQTTCommands(cmd_type).name.lower())
 
         handler = getattr(self, handler_name, self._default_handler)
 
@@ -95,6 +99,8 @@ class MqttPackageHandler(EventCallback):
         logger.warning('[UNKNOWN CMD] %s %s', hex(cmd), packet)
 
     def _handle_disconnect_packet(self, cmd, packet):
+        if self._reconnect:
+            asyncio.ensure_future(self.reconnect())
         self.on_disconnect(self, packet)
 
     def _handle_connack_packet(self, cmd, packet):

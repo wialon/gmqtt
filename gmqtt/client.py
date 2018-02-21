@@ -32,11 +32,12 @@ class Client(MqttPackageHandler):
         self._port = port
 
         self._connection = await self._create_connection(host, port=self._port, clean_session=clean_session, keepalive=keepalive)
-        await self._connection.auth(self._client_id, self._username, self._password)
 
+        await self._connection.auth(self._client_id, self._username, self._password)
         await self._connected.wait()
 
     async def _create_connection(self, host, port, clean_session, keepalive):
+        self._reconnect = True
         connection = await MQTTConnection.create_connection(host, port, clean_session, keepalive)
         connection.set_handler(self)
 
@@ -48,6 +49,7 @@ class Client(MqttPackageHandler):
         await self._connection.auth(self._client_id, self._username, self._password)
 
     async def disconnect(self):
+        self._reconnect = False
         await self._connection.close()
 
     def subscribe(self, topic, qos=0):
