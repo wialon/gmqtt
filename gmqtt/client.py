@@ -63,5 +63,3 @@ class Client(MqttPackageHandler):
 
     def _send_command_with_mid(self, cmd, mid, dup):
         self._connection.send_command_with_mid(cmd, mid, dup)
-
-

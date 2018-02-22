@@ -133,7 +133,12 @@ class MqttPackageHandler(EventCallback):
             logger.warning('[MQTT ERR PROTO] topic name is empty')
             return
 
-        print_topic = topic.decode('utf-8')
+        try:
+            print_topic = topic.decode('utf-8')
+        except UnicodeDecodeError as exc:
+            logger.warning('[INVALID CHARACTER IN TOPIC] %s', topic, exc_info=exc)
+            print_topic = topic
+
         payload = packet
 
         logger.debug('[RECV %s with QoS: %s] %s', print_topic, qos, payload)
@@ -146,13 +151,13 @@ class MqttPackageHandler(EventCallback):
             mid = None
 
         if qos == 0:
-            self.on_message(self, print_topic, payload, qos)
+            self.on_message(self, print_topic, packet, qos)
         elif qos == 1:
             self._send_puback(mid)
-            self.on_message(self, print_topic, payload, qos)
+            self.on_message(self, print_topic, packet, qos)
         elif qos == 2:
             self._send_pubrec(mid)
-            self.on_message(self, print_topic, payload, qos)
+            self.on_message(self, print_topic, packet, qos)
 
     def __call__(self, cmd, packet):
         try:
