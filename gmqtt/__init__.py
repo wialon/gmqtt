@@ -8,7 +8,7 @@ __email__ = 'mitu@gurtam.com'
 __copyright__ = ("Copyright 2013-%d, Gurtam; " % datetime.datetime.now().year,)
 
 __credits__ = ["Mikhail Turchunovich"]
-__version__ = "0.0.6"
+__version__ = "0.0.7"
 
 
 __all__ = [

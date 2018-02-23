@@ -1,4 +1,5 @@
 import asyncio
+import uuid
 
 from .mqtt.connection import MQTTConnection
 from .mqtt.handler import MqttPackageHandler
@@ -7,7 +8,7 @@ from .mqtt.handler import MqttPackageHandler
 class Client(MqttPackageHandler):
     def __init__(self, client_id, clean_session=True, transport='tcp'):
         super(Client, self).__init__()
-        self._client_id = client_id
+        self._client_id = client_id or uuid.uuid4().hex
 
         self._clean_session = clean_session
         self._transport = transport

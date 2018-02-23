@@ -119,14 +119,13 @@ class MQTTProtocol(BaseMQTTProtocol):
 
         return packet
 
-    # @utils.cancelable
     async def _read_loop(self):
         await self._connected.wait()
 
         while self._connected.is_set():
             byte = await self.read(1)
             if not byte:
-                await asyncio.sleep(10)
+                await asyncio.sleep(1)
                 continue
             command, = struct.unpack("!B", byte)
             packet = await self._read_packet()

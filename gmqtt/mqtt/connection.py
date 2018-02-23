@@ -62,4 +62,3 @@ class MQTTConnection(object):
 
     async def close(self):
         self._transport.close()
-        await asyncio.sleep(1)
