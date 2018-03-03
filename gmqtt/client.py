@@ -37,6 +37,9 @@ class Client(MqttPackageHandler):
         await self._connection.auth(self._client_id, self._username, self._password)
         await self._connected.wait()
 
+        if self._error:
+            raise self._error
+
     async def _create_connection(self, host, port, clean_session, keepalive):
         self._reconnect = True
         connection = await MQTTConnection.create_connection(host, port, clean_session, keepalive)

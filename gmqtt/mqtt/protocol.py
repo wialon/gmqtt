@@ -39,7 +39,10 @@ class BaseMQTTProtocol(asyncio.StreamReaderProtocol):
         super(BaseMQTTProtocol, self).data_received(data)
 
     def write_data(self, data: bytes):
-        self._transport.write(data)
+        if not self._transport.is_closing():
+            self._transport.write(data)
+        else:
+            logger.warning('[TRYING WRITE TO CLOSED SOCKET]')
 
     def connection_lost(self, exc):
         self._connected.clear()

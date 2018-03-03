@@ -13,6 +13,28 @@ def _empty_callback(*args, **kwargs):
     pass
 
 
+class MQTTError(Exception):
+    pass
+
+
+class MQTTConnectError(MQTTError):
+    __messages__ = {
+        1: "Connection Refused: unacceptable protocol version",
+        2: "Connection Refused: identifier rejected",
+        3: "Connection Refused: broker unavailable",
+        4: "Connection Refused: bad user name or password",
+        5: "Connection Refused: not authorised"
+    }
+
+    def __init__(self, code):
+        self._code = code
+        self.message = self.__messages__.get(code, 'Unknown error')\
+
+
+    def __str__(self):
+        return "code {} ({})".format(self._code, self.message)
+
+
 class EventCallback(object):
     def __init__(self, *args, **kwargs):
         super(EventCallback, self).__init__(*args, **kwargs)
@@ -71,6 +93,7 @@ class MqttPackageHandler(EventCallback):
     def __init__(self, *args, **kwargs):
         super(MqttPackageHandler, self).__init__(*args, **kwargs)
         self._messages_in = {}
+        self._error = None
 
     def _send_command_with_mid(self, cmd, mid, dup):
         raise NotImplementedError
@@ -109,6 +132,11 @@ class MqttPackageHandler(EventCallback):
             raise ValueError()
 
         (flags, result) = struct.unpack("!BB", packet)
+        if result != 0:
+            logger.error('[CONNACK] %s', hex(result))
+            self._error = MQTTConnectError(result)
+            asyncio.ensure_future(self.disconnect())
+            return
 
         # TODO: Implement checking for the flags and results
         # see 3.2.2.3 Connect Return code of the http://docs.oasis-open.org/mqtt/mqtt/v3.1.1/os/mqtt-v3.1.1-os.pdf
@@ -143,7 +171,6 @@ class MqttPackageHandler(EventCallback):
 
         logger.debug('[RECV %s with QoS: %s] %s', print_topic, qos, payload)
 
-        # TODO: send confirmation msg
         if qos > 0:
             pack_format = "!H" + str(len(packet) - 2) + 's'
             (mid, packet) = struct.unpack(pack_format, packet)
@@ -199,8 +226,3 @@ class MqttPackageHandler(EventCallback):
             return
 
         topic, payload, qos = self._messages_in[mid]
-
-
-
-
-
