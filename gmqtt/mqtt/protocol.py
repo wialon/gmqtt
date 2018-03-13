@@ -87,8 +87,8 @@ class MQTTProtocol(BaseMQTTProtocol):
     def send_ping_request(self):
         self.send_simple_command_packet(MQTTCommands.PINGREQ)
 
-    def send_publish(self, topic, payload, qos):
-        pkg = package.PublishPacket.build_package(topic, payload, qos)
+    def send_publish(self, topic, payload, qos, retain):
+        pkg = package.PublishPacket.build_package(topic, payload, qos, retain)
         self.write_data(pkg)
 
     def send_command_with_mid(self, cmd, mid, dup):

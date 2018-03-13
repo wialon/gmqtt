@@ -59,8 +59,8 @@ class Client(MqttPackageHandler):
     def subscribe(self, topic, qos=0):
         self._connection.subsribe(topic, qos)
 
-    def publish(self, topic, payload, qos=0):
-        self._connection.publish(topic, payload, qos=qos)
+    def publish(self, topic, payload, qos=0, retain=False):
+        self._connection.publish(topic, payload, qos=qos, retain=retain)
 
     def _send_simple_command(self, cmd):
         self._connection.send_simple_command(cmd)
