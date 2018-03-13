@@ -48,7 +48,7 @@ class BaseMQTTProtocol(asyncio.StreamReaderProtocol):
         self._connected.clear()
         super(BaseMQTTProtocol, self).connection_lost(exc)
         if exc:
-            logger.error('[EXC: CONN LOST]', exc_info=exc)
+            logger.warning('[EXC: CONN LOST]', exc_info=exc)
         else:
             logger.info('[CONN CLOSE NORMALLY]')
 

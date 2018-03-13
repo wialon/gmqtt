@@ -93,6 +93,7 @@ class MqttPackageHandler(EventCallback):
     def __init__(self, *args, **kwargs):
         super(MqttPackageHandler, self).__init__(*args, **kwargs)
         self._messages_in = {}
+        self._handler_cache = {}
         self._error = None
 
     def _send_command_with_mid(self, cmd, mid, dup):
@@ -107,14 +108,16 @@ class MqttPackageHandler(EventCallback):
     def _send_pubrel(self, mid, dup):
         self._send_command_with_mid(MQTTCommands.PUBREL | 2, mid, dup)
 
+    def __get_handler__(self, cmd):
+        cmd_type = cmd & 0xF0
+        if cmd_type not in self._handler_cache:
+            handler_name = '_handle_{}_packet'.format(MQTTCommands(cmd_type).name.lower())
+            self._handler_cache[cmd_type] = getattr(self, handler_name, self._default_handler)
+        return self._handler_cache[cmd_type]
+
     def _handle_packet(self, cmd, packet):
         logger.debug('[CMD %s] %s', hex(cmd), packet)
-        cmd_type = cmd & 0xF0
-
-        handler_name = '_handle_{}_packet'.format(MQTTCommands(cmd_type).name.lower())
-
-        handler = getattr(self, handler_name, self._default_handler)
-
+        handler = self.__get_handler__(cmd)
         handler(cmd, packet)
         self._last_msg_in = time.monotonic()
 
@@ -157,7 +160,7 @@ class MqttPackageHandler(EventCallback):
         pack_format = '!' + str(slen) + 's' + str(len(packet) - slen) + 's'
         (topic, packet) = struct.unpack(pack_format, packet)
 
-        if len(topic) == 0:
+        if not topic:
             logger.warning('[MQTT ERR PROTO] topic name is empty')
             return
 
