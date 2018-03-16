@@ -18,6 +18,7 @@ Here is a very simple example that subscribes to the broker TOPIC topic and prin
 import asyncio
 import os
 import signal
+import time
 
 from gmqtt import Client as MQTTClient
 
@@ -41,6 +42,8 @@ def on_message(client, topic, payload, qos):
 def on_disconnect(client, packet):
     print('Disconnected')
 
+def on_subscribe(client, mid, qos):
+    print('SUBSCRIBED')
 
 def ask_exit(*args):
     STOP.set()
@@ -52,9 +55,12 @@ async def main(broker_host, token):
     client.on_connect = on_connect
     client.on_message = on_message
     client.on_disconnect = on_disconnect
+    client.on_subscribe = on_subscribe
 
     client.set_auth_credentials(token, None)
     await client.connect(broker_host)
+
+    client.publish('TEST/TIME', str(time.time()), qos=1)
 
     await STOP.wait()
     await client.disconnect()

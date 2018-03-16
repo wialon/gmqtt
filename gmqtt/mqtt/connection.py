@@ -42,8 +42,8 @@ class MQTTConnection(object):
     async def auth(self, client_id, username, password):
         await self._protocol.send_auth_package(client_id, username, password, self._clean_session, self._keepalive)
 
-    def publish(self, topic, payload, qos):
-        self._protocol.send_publish(topic, payload, qos)
+    def publish(self, topic, payload, qos, retain):
+        self._protocol.send_publish(topic, payload, qos, retain)
 
     def subsribe(self, topic, qos):
         self._protocol.send_subscribe_packet(topic, qos)

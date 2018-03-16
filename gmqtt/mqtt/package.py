@@ -138,8 +138,8 @@ class SimpleCommandPacket(PackageFactory):
 
 class PublishPacket(PackageFactory):
     @classmethod
-    def build_package(cls, topic, payload, qos, retain=False, dup=False) -> bytes:
-        command = MQTTCommands.PUBLISH | ((dup & 0x1) << 3) | (qos << 1) | retain
+    def build_package(cls, topic, payload, qos, retain, dup=False) -> bytes:
+        command = MQTTCommands.PUBLISH | ((dup & 0x1) << 3) | (qos << 1) | (retain & 0x1)
         packet = bytearray()
         packet.append(command)
 
