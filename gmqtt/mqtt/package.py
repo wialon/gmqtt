@@ -2,8 +2,8 @@ import json
 import struct
 import logging
 
-from .constants import MQTTCommands
-
+from gmqtt.mqtt.property import Property
+from .constants import MQTTCommands, MQTTv50
 
 logger = logging.getLogger(__name__)
 
@@ -58,10 +58,27 @@ class PackageFactory(object):
             LAST_MID = 1
         return LAST_MID
 
+    @classmethod
+    def _build_properties_data(cls, properties_dict, protocol_version):
+        if protocol_version < MQTTv50:
+            return bytearray()
+        data = bytearray()
+        result = bytearray()
+        for property_name, property_value in properties_dict.items():
+            try:
+                property = Property.factory(name=property_name)
+            except KeyError:
+                continue
+            property_bytes = property.dumps(property_value)
+            data.extend(property_bytes)
+        result += struct.pack('!B', len(data))
+        result.extend(data)
+        return result
+
 
 class LoginPackageFactor(PackageFactory):
     @classmethod
-    def build_package(cls, client_id, username, password, clean_session, keepalive, protocol):
+    def build_package(cls, client_id, username, password, clean_session, keepalive, protocol, **kwargs):
         remaining_length = 2 + len(protocol.proto_name) + 1 + 1 + 2 + 2 + len(client_id)
 
         connect_flags = 0
@@ -84,6 +101,9 @@ class LoginPackageFactor(PackageFactory):
         packet = bytearray()
         packet.append(command)
 
+        prop_bytes = cls._build_properties_data(kwargs, protocol.proto_ver)
+        remaining_length += len(prop_bytes)
+
         cls._pack_remaining_length(packet, remaining_length)
         packet.extend(struct.pack("!H" + str(len(protocol.proto_name)) + "sBBH",
                                   len(protocol.proto_name),
@@ -91,6 +111,8 @@ class LoginPackageFactor(PackageFactory):
                                   protocol.proto_ver,
                                   connect_flags,
                                   keepalive))
+
+        packet.extend(prop_bytes)
 
         cls._pack_str16(packet, client_id)
 
@@ -105,7 +127,7 @@ class LoginPackageFactor(PackageFactory):
 
 class SubscribePacket(PackageFactory):
     @classmethod
-    def build_package(cls, topic, qos) -> bytes:
+    def build_package(cls, topic, qos, protocol, **kwargs) -> bytes:
         remaining_length = 2
         if not isinstance(topic, (list, tuple)):
             topics = [topic]
@@ -115,12 +137,16 @@ class SubscribePacket(PackageFactory):
         for t in topics:
             remaining_length += 2 + len(t) + 1
 
+        properties = cls._build_properties_data(kwargs, protocol.proto_ver)
+        remaining_length += len(properties)
+
         command = MQTTCommands.SUBSCRIBE | (False << 3) | 0x2
         packet = bytearray()
         packet.append(command)
         cls._pack_remaining_length(packet, remaining_length)
         local_mid = cls._mid_generate()
         packet.extend(struct.pack("!H", local_mid))
+        packet.extend(properties)
         for t in topics:
             cls._pack_str16(packet, t)
             packet.append(qos)
@@ -138,7 +164,7 @@ class SimpleCommandPacket(PackageFactory):
 
 class PublishPacket(PackageFactory):
     @classmethod
-    def build_package(cls, topic, payload, qos, retain, dup=False) -> bytes:
+    def build_package(cls, topic, payload, qos, retain, protocol, dup=False, **kwargs) -> bytes:
         command = MQTTCommands.PUBLISH | ((dup & 0x1) << 3) | (qos << 1) | (retain & 0x1)
         packet = bytearray()
         packet.append(command)
@@ -159,6 +185,8 @@ class PublishPacket(PackageFactory):
             raise ValueError('Payload too large.')
 
         remaining_length = 2 + len(topic) + payload_size
+        prop_bytes = cls._build_properties_data(kwargs, protocol_version=protocol.proto_ver)
+        remaining_length += len(prop_bytes)
 
         if payload_size == 0:
             logger.debug("Sending PUBLISH (q%d), '%s' (NULL payload)", qos, topic)
@@ -177,6 +205,7 @@ class PublishPacket(PackageFactory):
         if qos > 0:
             # For message id
             packet.extend(struct.pack("!H", mid))
+        packet.extend(prop_bytes)
 
         packet.extend(payload)
 

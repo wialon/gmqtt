@@ -3,8 +3,10 @@ import logging
 import struct
 import time
 
+from gmqtt.mqtt.property import Property
+from gmqtt.mqtt.protocol import MQTTProtocol
 from .constants import MQTTCommands
-
+from gmqtt.mqtt.constants import MQTTv311, MQTTv50
 
 logger = logging.getLogger(__name__)
 
@@ -95,6 +97,7 @@ class MqttPackageHandler(EventCallback):
         self._messages_in = {}
         self._handler_cache = {}
         self._error = None
+        self.properties = None
 
     def _send_command_with_mid(self, cmd, mid, dup):
         raise NotImplementedError
@@ -129,17 +132,38 @@ class MqttPackageHandler(EventCallback):
             asyncio.ensure_future(self.reconnect())
         self.on_disconnect(self, packet)
 
+    def _parse_properties(self, packet):
+        if self.protocol_version < MQTTv50:
+            # If protocol is version is less than 5.0, there is no properties in packet
+            return {}, packet
+        properties_len, = struct.unpack('!B', packet[:1])
+        left_packet = packet[1+properties_len:]
+        packet = packet[1:1+properties_len]
+        properties_dict = dict()
+        while packet:
+            property_identifier, = struct.unpack("!B", packet[:1])
+            property_obj = Property.factory(id_=property_identifier)
+            result, packet = property_obj.loads(packet[1:])
+            properties_dict.update(result)
+        return properties_dict, left_packet
+
     def _handle_connack_packet(self, cmd, packet):
         self._connected.set()
-        if len(packet) != 2:
-            raise ValueError()
 
-        (flags, result) = struct.unpack("!BB", packet)
+        (flags, result) = struct.unpack("!BB", packet[:2])
+
         if result != 0:
             logger.error('[CONNACK] %s', hex(result))
-            self._error = MQTTConnectError(result)
-            asyncio.ensure_future(self.disconnect())
-            return
+            if result == 1 and self.protocol_version == MQTTv50:
+                MQTTProtocol.protocol_version = MQTTv311
+                asyncio.ensure_future(self.reconnect())
+                return
+            else:
+                self._error = MQTTConnectError(result)
+                asyncio.ensure_future(self.disconnect())
+
+        if len(packet) > 2:
+            self.properties = self._parse_properties(packet[2:])
 
         # TODO: Implement checking for the flags and results
         # see 3.2.2.3 Connect Return code of the http://docs.oasis-open.org/mqtt/mqtt/v3.1.1/os/mqtt-v3.1.1-os.pdf
@@ -180,14 +204,16 @@ class MqttPackageHandler(EventCallback):
         else:
             mid = None
 
+        properties, packet = self._parse_properties(packet)
+
         if qos == 0:
-            self.on_message(self, print_topic, packet, qos)
+            self.on_message(self, print_topic, packet, qos, properties)
         elif qos == 1:
             self._send_puback(mid)
-            self.on_message(self, print_topic, packet, qos)
+            self.on_message(self, print_topic, packet, qos, properties)
         elif qos == 2:
             self._send_pubrec(mid)
-            self.on_message(self, print_topic, packet, qos)
+            self.on_message(self, print_topic, packet, qos, properties)
 
     def __call__(self, cmd, packet):
         try:
