@@ -1,10 +1,10 @@
 import asyncio
 import uuid
 
-from gmqtt.mqtt.protocol import MQTTProtocol
+from .mqtt.protocol import MQTTProtocol
 from .mqtt.connection import MQTTConnection
 from .mqtt.handler import MqttPackageHandler
-from gmqtt.mqtt.constants import MQTTv311, MQTTv50
+from .mqtt.constants import MQTTv311, MQTTv50
 
 
 class Client(MqttPackageHandler):

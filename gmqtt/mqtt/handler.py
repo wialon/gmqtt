@@ -3,10 +3,10 @@ import logging
 import struct
 import time
 
-from gmqtt.mqtt.property import Property
-from gmqtt.mqtt.protocol import MQTTProtocol
+from .property import Property
+from .protocol import MQTTProtocol
 from .constants import MQTTCommands
-from gmqtt.mqtt.constants import MQTTv311, MQTTv50
+from .constants import MQTTv311, MQTTv50
 
 logger = logging.getLogger(__name__)
 
@@ -155,7 +155,7 @@ class MqttPackageHandler(EventCallback):
         if result != 0:
             logger.error('[CONNACK] %s', hex(result))
             if result == 1 and self.protocol_version == MQTTv50:
-                MQTTProtocol.protocol_version = MQTTv311
+                MQTTProtocol.proto_ver = MQTTv311
                 asyncio.ensure_future(self.reconnect())
                 return
             else:
