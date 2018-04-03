@@ -124,12 +124,18 @@ class MqttPackageHandler(EventCallback):
         handler(cmd, packet)
         self._last_msg_in = time.monotonic()
 
+    def _handle_exception_in_future(self, future):
+        if not future.exception():
+            return
+        self.on_disconnect(self, packet=None, exc=future.exception())
+
     def _default_handler(self, cmd, packet):
         logger.warning('[UNKNOWN CMD] %s %s', hex(cmd), packet)
 
     def _handle_disconnect_packet(self, cmd, packet):
         if self._reconnect:
-            asyncio.ensure_future(self.reconnect())
+            future = asyncio.ensure_future(self.reconnect())
+            future.add_done_callback(self._handle_exception_in_future)
         self.on_disconnect(self, packet)
 
     def _parse_properties(self, packet):
@@ -156,7 +162,8 @@ class MqttPackageHandler(EventCallback):
             logger.error('[CONNACK] %s', hex(result))
             if result == 1 and self.protocol_version == MQTTv50:
                 MQTTProtocol.proto_ver = MQTTv311
-                asyncio.ensure_future(self.reconnect())
+                future = asyncio.ensure_future(self.reconnect())
+                future.add_done_callback(self._handle_exception_in_future)
                 return
             else:
                 self._error = MQTTConnectError(result)

@@ -39,7 +39,7 @@ def on_message(client, topic, payload, qos, properties):
     print('RECV MSG:', payload)
 
 
-def on_disconnect(client, packet):
+def on_disconnect(client, packet, exc=None):
     print('Disconnected')
 
 def on_subscribe(client, mid, qos):
