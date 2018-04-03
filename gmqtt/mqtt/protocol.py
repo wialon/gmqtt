@@ -3,7 +3,7 @@ import logging
 import struct
 
 from . import package
-from .constants import MQTTCommands
+from .constants import MQTTv50, MQTTCommands
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +58,7 @@ class BaseMQTTProtocol(asyncio.StreamReaderProtocol):
 
 class MQTTProtocol(BaseMQTTProtocol):
     proto_name = b'MQTT'
-    proto_ver = 4
+    proto_ver = MQTTv50
 
     def __init__(self, *args, **kwargs):
         super(MQTTProtocol, self).__init__(*args, **kwargs)
@@ -72,12 +72,13 @@ class MQTTProtocol(BaseMQTTProtocol):
         super().connection_made(transport)
         self._read_loop_future = asyncio.ensure_future(self._read_loop())
 
-    async def send_auth_package(self, client_id, username, password, clean_session, keepalive):
-        pkg = package.LoginPackageFactor.build_package(client_id, username, password, clean_session, keepalive, self)
+    async def send_auth_package(self, client_id, username, password, clean_session, keepalive, **kwargs):
+        pkg = package.LoginPackageFactor.build_package(client_id, username, password, clean_session,
+                                                       keepalive, self, **kwargs)
         self.write_data(pkg)
 
-    def send_subscribe_packet(self, topic, qos):
-        pkg = package.SubscribePacket.build_package(topic, qos)
+    def send_subscribe_packet(self, topic, qos, **kwargs):
+        pkg = package.SubscribePacket.build_package(topic, qos, self, **kwargs)
         self.write_data(pkg)
 
     def send_simple_command_packet(self, cmd):
@@ -87,8 +88,8 @@ class MQTTProtocol(BaseMQTTProtocol):
     def send_ping_request(self):
         self.send_simple_command_packet(MQTTCommands.PINGREQ)
 
-    def send_publish(self, topic, payload, qos, retain):
-        pkg = package.PublishPacket.build_package(topic, payload, qos, retain)
+    def send_publish(self, topic, payload, qos, retain, **kwargs):
+        pkg = package.PublishPacket.build_package(topic, payload, qos, retain, self, **kwargs)
         self.write_data(pkg)
 
     def send_command_with_mid(self, cmd, mid, dup):
