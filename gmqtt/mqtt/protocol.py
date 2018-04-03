@@ -2,9 +2,8 @@ import asyncio
 import logging
 import struct
 
-from gmqtt.mqtt.constants import MQTTv50
 from . import package
-from .constants import MQTTCommands
+from .constants import MQTTv50, MQTTCommands
 
 logger = logging.getLogger(__name__)
 

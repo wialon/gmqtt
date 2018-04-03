@@ -2,7 +2,7 @@ import json
 import struct
 import logging
 
-from gmqtt.mqtt.property import Property
+from .property import Property
 from .constants import MQTTCommands, MQTTv50
 
 logger = logging.getLogger(__name__)
