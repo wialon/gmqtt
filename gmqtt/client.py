@@ -52,12 +52,14 @@ class Client(MqttPackageHandler):
 
     async def reconnect(self):
         await self.disconnect()
+        await asyncio.sleep(1)
         self._connection = await self._create_connection(self._host, self._port, clean_session=True, keepalive=60)
         await self._connection.auth(self._client_id, self._username, self._password)
 
     async def disconnect(self):
         self._reconnect = False
-        await self._connection.close()
+        if self._connection:
+            await self._connection.close()
 
     def subscribe(self, topic, qos=0, **kwargs):
         self._connection.subsribe(topic, qos, **kwargs)
