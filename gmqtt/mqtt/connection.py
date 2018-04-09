@@ -18,7 +18,7 @@ class MQTTConnection(object):
         self._last_data_in = time.monotonic()
         self._last_data_out = time.monotonic()
 
-        asyncio.get_event_loop().call_later(self._keepalive, self._keep_connection)
+        self._keep_connection_callback = asyncio.get_event_loop().call_later(self._keepalive, self._keep_connection)
 
     @classmethod
     async def create_connection(cls, host, port, clean_session, keepalive, loop=None):
@@ -27,9 +27,11 @@ class MQTTConnection(object):
         return MQTTConnection(transport, protocol, clean_session, keepalive)
 
     def _keep_connection(self):
+        if self.is_closing():
+            return
         if time.monotonic() - self._last_data_in > self._keepalive:
             self._send_ping_request()
-        asyncio.get_event_loop().call_later(self._keepalive, self._keep_connection)
+        self._keep_connection_callback = asyncio.get_event_loop().call_later(self._keepalive, self._keep_connection)
 
     def put_package(self, pkg):
         self._handler(*pkg)
@@ -62,4 +64,8 @@ class MQTTConnection(object):
         self._handler = handler
 
     async def close(self):
+        self._keep_connection_callback.cancel()
         self._transport.close()
+
+    def is_closing(self):
+        return self._transport.is_closing()
