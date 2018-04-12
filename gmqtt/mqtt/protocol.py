@@ -123,7 +123,7 @@ class MQTTProtocol(BaseMQTTProtocol):
 
         return packet
 
-    async def _read_loop(self):
+    async def _read_loop(self, timeout=5):
         await self._connected.wait()
 
         while self._connected.is_set():
@@ -132,7 +132,11 @@ class MQTTProtocol(BaseMQTTProtocol):
                 await asyncio.sleep(1)
                 continue
             command, = struct.unpack("!B", byte)
-            packet = await self._read_packet()
+            try:
+                packet = await asyncio.wait_for(self._read_packet(), timeout)
+            except TimeoutError:
+                logger.warning('[TIMEOUT] read packet took too long')
+                continue
             self._connection.put_package((command, packet))
 
     def connection_lost(self, exc):
