@@ -48,7 +48,6 @@ def on_subscribe(client, mid, qos):
 def ask_exit(*args):
     STOP.set()
 
-await client.connect(broker_host, 1883, keepalive=60)
 async def main(broker_host, token):
     client = MQTTClient("client-id")
 
