@@ -5,7 +5,7 @@
 
 The latest stable version is available in the Python Package Index (PyPi) and can be installed using
 ```bash
-pip install gmqtt
+pip3 install gmqtt
 ```
 
 
