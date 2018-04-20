@@ -53,7 +53,12 @@ class BaseMQTTProtocol(asyncio.StreamReaderProtocol):
             logger.info('[CONN CLOSE NORMALLY]')
 
     async def read(self, n=-1):
-        return await self._stream_reader.read(n=n)
+        bs = await self._stream_reader.read(n=n)
+        if not bs:
+            logger.warning('[READ] no data received, breaking connection')
+            self.connection_lost(None)
+        return bs
+
 
 
 class MQTTProtocol(BaseMQTTProtocol):
@@ -123,20 +128,15 @@ class MQTTProtocol(BaseMQTTProtocol):
 
         return packet
 
-    async def _read_loop(self, timeout=5):
+    async def _read_loop(self):
         await self._connected.wait()
 
         while self._connected.is_set():
             byte = await self.read(1)
             if not byte:
-                await asyncio.sleep(1)
                 continue
             command, = struct.unpack("!B", byte)
-            try:
-                packet = await asyncio.wait_for(self._read_packet(), timeout)
-            except TimeoutError:
-                logger.warning('[TIMEOUT] read packet took too long')
-                continue
+            packet = await self._read_packet()
             self._connection.put_package((command, packet))
 
     def connection_lost(self, exc):
