@@ -8,7 +8,7 @@ from .mqtt.constants import MQTTv311, MQTTv50
 
 
 class Client(MqttPackageHandler):
-    def __init__(self, client_id, clean_session=True, transport='tcp'):
+    def __init__(self, client_id, clean_session=True, transport='tcp', **kwargs):
         super(Client, self).__init__()
         self._client_id = client_id or uuid.uuid4().hex
 
@@ -22,6 +22,14 @@ class Client(MqttPackageHandler):
 
         self._host = None
         self._port = None
+
+        self._connect_properties = kwargs
+        self._connack_properties = None
+
+    @property
+    def properties(self):
+        # merge two dictionaries from connect and connack packages
+        return {**self._connack_properties, **self._connect_properties}
 
     def set_auth_credentials(self, username, password=None):
         self._username = username.encode()
@@ -38,7 +46,7 @@ class Client(MqttPackageHandler):
 
         self._connection = await self._create_connection(host, port=self._port, clean_session=clean_session, keepalive=keepalive)
 
-        await self._connection.auth(self._client_id, self._username, self._password)
+        await self._connection.auth(self._client_id, self._username, self._password, **self._connect_properties)
         await self._connected.wait()
 
         if self._error:
@@ -54,7 +62,7 @@ class Client(MqttPackageHandler):
         await self.disconnect()
         await asyncio.sleep(1)
         self._connection = await self._create_connection(self._host, self._port, clean_session=True, keepalive=60)
-        await self._connection.auth(self._client_id, self._username, self._password)
+        await self._connection.auth(self._client_id, self._username, self._password, **self._connect_properties)
 
     async def disconnect(self):
         self._reconnect = False

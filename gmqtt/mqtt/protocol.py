@@ -142,8 +142,8 @@ class MQTTProtocol(BaseMQTTProtocol):
     def connection_lost(self, exc):
         super(MQTTProtocol, self).connection_lost(exc)
         self._connection.put_package((MQTTCommands.DISCONNECT, b''))
-
-        self._read_loop_future.cancel()
-        self._read_loop_future = None
+        if self._read_loop_future is not None:
+            self._read_loop_future.cancel()
+            self._read_loop_future = None
 
         self._queue = asyncio.Queue()
