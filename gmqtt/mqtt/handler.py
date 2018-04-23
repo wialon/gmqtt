@@ -2,7 +2,9 @@ import asyncio
 import logging
 import struct
 import time
+from collections import defaultdict
 
+from .utils import unpack_variable_byte_integer
 from .property import Property
 from .protocol import MQTTProtocol
 from .constants import MQTTCommands
@@ -25,7 +27,8 @@ class MQTTConnectError(MQTTError):
         2: "Connection Refused: identifier rejected",
         3: "Connection Refused: broker unavailable",
         4: "Connection Refused: bad user name or password",
-        5: "Connection Refused: not authorised"
+        5: "Connection Refused: not authorised",
+        10: 'Cannot handle CONNACK package'
     }
 
     def __init__(self, code):
@@ -97,7 +100,6 @@ class MqttPackageHandler(EventCallback):
         self._messages_in = {}
         self._handler_cache = {}
         self._error = None
-        self.properties = None
 
     def _send_command_with_mid(self, cmd, mid, dup):
         raise NotImplementedError
@@ -142,15 +144,20 @@ class MqttPackageHandler(EventCallback):
         if self.protocol_version < MQTTv50:
             # If protocol is version is less than 5.0, there is no properties in packet
             return {}, packet
-        properties_len, = struct.unpack('!B', packet[:1])
-        left_packet = packet[1+properties_len:]
-        packet = packet[1:1+properties_len]
-        properties_dict = dict()
+        properties_len, left_packet = unpack_variable_byte_integer(packet)
+        packet = left_packet[:properties_len]
+        left_packet = left_packet[properties_len:]
+        properties_dict = defaultdict(list)
         while packet:
             property_identifier, = struct.unpack("!B", packet[:1])
             property_obj = Property.factory(id_=property_identifier)
+            if property_obj is None:
+                logger.critical('[PROPERTIES] received invalid property id {}, disconnecting'.format(property_identifier))
+                return None, None
             result, packet = property_obj.loads(packet[1:])
-            properties_dict.update(result)
+            for k, v in result.items():
+                properties_dict[k].append(v)
+        properties_dict = dict(properties_dict)
         return properties_dict, left_packet
 
     def _handle_connack_packet(self, cmd, packet):
@@ -170,13 +177,17 @@ class MqttPackageHandler(EventCallback):
                 asyncio.ensure_future(self.disconnect())
 
         if len(packet) > 2:
-            self.properties = self._parse_properties(packet[2:])
+            properties, _ = self._parse_properties(packet[2:])
+            if properties is None:
+                self._error = MQTTConnectError(10)
+                asyncio.ensure_future(self.disconnect())
+            self._connack_properties = properties
 
         # TODO: Implement checking for the flags and results
         # see 3.2.2.3 Connect Return code of the http://docs.oasis-open.org/mqtt/mqtt/v3.1.1/os/mqtt-v3.1.1-os.pdf
 
         logger.debug('[CONNACK] flags: %s, result: %s', hex(flags), hex(result))
-        self.on_connect(self, flags, result)
+        self.on_connect(self, flags, result, self.properties)
 
     def _handle_publish_packet(self, cmd, raw_packet):
         header = cmd
@@ -212,6 +223,9 @@ class MqttPackageHandler(EventCallback):
             mid = None
 
         properties, packet = self._parse_properties(packet)
+        if packet is None:
+            logger.critical('[INVALID MESSAGE] skipping: {}'.format(raw_packet))
+            return
 
         if qos == 0:
             self.on_message(self, print_topic, packet, qos, properties)

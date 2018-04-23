@@ -41,9 +41,9 @@ class MQTTConnection(object):
         # to the buffer, and this buffer flushing async
         self._transport.write(package.encode())
 
-    async def auth(self, client_id, username, password):
+    async def auth(self, client_id, username, password, **kwargs):
         await self._protocol.send_auth_package(client_id, username, password, self._clean_session,
-                                               self._keepalive)
+                                               self._keepalive, **kwargs)
 
     def publish(self, topic, payload, qos, retain, **kwargs):
         self._protocol.send_publish(topic, payload, qos, retain, **kwargs)

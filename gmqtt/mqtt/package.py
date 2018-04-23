@@ -2,8 +2,9 @@ import json
 import struct
 import logging
 
-from .property import Property
 from .constants import MQTTCommands, MQTTv50
+from .property import Property
+from .utils import pack_variable_byte_integer
 
 logger = logging.getLogger(__name__)
 
@@ -28,22 +29,6 @@ class PackageFactory(object):
         raise NotImplementedError
 
     @classmethod
-    def _pack_remaining_length(cls, packet, remaining_length):
-        remaining_bytes = []
-        while True:
-            byte = remaining_length % 128
-            remaining_length = remaining_length // 128
-            # If there are more digits to encode, set the top bit of this digit
-            if remaining_length > 0:
-                byte |= 0x80
-
-            remaining_bytes.append(byte)
-            packet.append(byte)
-            if remaining_length == 0:
-                # FIXME - this doesn't deal with incorrectly large payloads
-                return packet
-
-    @classmethod
     def _pack_str16(cls, packet, data):
         if isinstance(data, str):
             data = data.encode('utf-8')
@@ -63,15 +48,14 @@ class PackageFactory(object):
         if protocol_version < MQTTv50:
             return bytearray()
         data = bytearray()
-        result = bytearray()
         for property_name, property_value in properties_dict.items():
-            try:
-                property = Property.factory(name=property_name)
-            except KeyError:
+            property = Property.factory(name=property_name)
+            if property is None:
+                logger.warning('[GMQTT] property {} is not supported, it was ignored'.format(property_name))
                 continue
             property_bytes = property.dumps(property_value)
             data.extend(property_bytes)
-        result += struct.pack('!B', len(data))
+        result = pack_variable_byte_integer(len(data))
         result.extend(data)
         return result
 
@@ -104,7 +88,7 @@ class LoginPackageFactor(PackageFactory):
         prop_bytes = cls._build_properties_data(kwargs, protocol.proto_ver)
         remaining_length += len(prop_bytes)
 
-        cls._pack_remaining_length(packet, remaining_length)
+        packet.extend(pack_variable_byte_integer(remaining_length))
         packet.extend(struct.pack("!H" + str(len(protocol.proto_name)) + "sBBH",
                                   len(protocol.proto_name),
                                   protocol.proto_name,
@@ -143,7 +127,7 @@ class SubscribePacket(PackageFactory):
         command = MQTTCommands.SUBSCRIBE | (False << 3) | 0x2
         packet = bytearray()
         packet.append(command)
-        cls._pack_remaining_length(packet, remaining_length)
+        packet.extend(pack_variable_byte_integer(remaining_length))
         local_mid = cls._mid_generate()
         packet.extend(struct.pack("!H", local_mid))
         packet.extend(properties)
@@ -199,7 +183,7 @@ class PublishPacket(PackageFactory):
             # For message id
             remaining_length += 2
 
-        cls._pack_remaining_length(packet, remaining_length)
+        packet.extend(pack_variable_byte_integer(remaining_length))
         cls._pack_str16(packet, topic)
 
         if qos > 0:
