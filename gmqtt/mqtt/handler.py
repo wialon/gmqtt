@@ -53,6 +53,8 @@ class EventCallback(object):
 
         self._reconnect = True
 
+        self.failed_connections = 0
+
     @property
     def on_subscribe(self):
         return self._on_subscribe_callback
@@ -167,6 +169,7 @@ class MqttPackageHandler(EventCallback):
 
         if result != 0:
             logger.error('[CONNACK] %s', hex(result))
+            self.failed_connections += 1
             if result == 1 and self.protocol_version == MQTTv50:
                 MQTTProtocol.proto_ver = MQTTv311
                 future = asyncio.ensure_future(self.reconnect())
@@ -174,7 +177,10 @@ class MqttPackageHandler(EventCallback):
                 return
             else:
                 self._error = MQTTConnectError(result)
-                asyncio.ensure_future(self.disconnect())
+                asyncio.ensure_future(self.reconnect())
+                return 
+        else:
+            self.failed_connections = 0
 
         if len(packet) > 2:
             properties, _ = self._parse_properties(packet[2:])

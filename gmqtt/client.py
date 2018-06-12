@@ -1,10 +1,17 @@
 import asyncio
+import logging
 import uuid
 
 from .mqtt.protocol import MQTTProtocol
 from .mqtt.connection import MQTTConnection
 from .mqtt.handler import MqttPackageHandler
 from .mqtt.constants import MQTTv311, MQTTv50
+
+logger = logging.getLogger(__name__)
+
+FAILED_CONNECTIONS_STOP_RECONNECT = 100
+
+RECONNECTION_SLEEP = 6
 
 
 class Client(MqttPackageHandler):
@@ -60,7 +67,10 @@ class Client(MqttPackageHandler):
 
     async def reconnect(self):
         await self.disconnect()
-        await asyncio.sleep(1)
+        if self.failed_connections > FAILED_CONNECTIONS_STOP_RECONNECT:
+            logger.error('[DISCONNECTED] max number of failed connection attempts achieved')
+            return
+        await asyncio.sleep(RECONNECTION_SLEEP)
         self._connection = await self._create_connection(self._host, self._port, clean_session=True, keepalive=60)
         await self._connection.auth(self._client_id, self._username, self._password, **self._connect_properties)
 
