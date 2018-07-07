@@ -54,8 +54,8 @@ class MQTTConnection(object):
     def send_simple_command(self, cmd):
         self._protocol.send_simple_command_packet(cmd)
 
-    def send_command_with_mid(self, cmd, mid, dup):
-        self._protocol.send_command_with_mid(cmd, mid, dup)
+    def send_command_with_mid(self, cmd, mid, dup, reason_code=0):
+        self._protocol.send_command_with_mid(cmd, mid, dup, reason_code=reason_code)
 
     def _send_ping_request(self):
         self._protocol.send_ping_request()

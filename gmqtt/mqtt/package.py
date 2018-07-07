@@ -199,10 +199,13 @@ class PublishPacket(PackageFactory):
 class CommandWithMidPacket(PackageFactory):
 
     @classmethod
-    def build_package(cls, cmd, mid, dup) -> bytes:
+    def build_package(cls, cmd, mid, dup, reason_code=0, proto_ver=MQTTv50) -> bytes:
         if dup:
             cmd |= 0x8
-
-        remaining_length = 2
-        packet = struct.pack('!BBH', cmd, remaining_length, mid)
+        if proto_ver == MQTTv50:
+            remaining_length = 4
+            packet = struct.pack('!BBHBB', cmd, remaining_length, mid, reason_code, 0)
+        else:
+            remaining_length = 2
+            packet = struct.pack('!BBH', cmd, remaining_length, mid)
         return packet
