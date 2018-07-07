@@ -97,8 +97,9 @@ class MQTTProtocol(BaseMQTTProtocol):
         pkg = package.PublishPacket.build_package(topic, payload, qos, retain, self, **kwargs)
         self.write_data(pkg)
 
-    def send_command_with_mid(self, cmd, mid, dup):
-        pkg = package.CommandWithMidPacket.build_package(cmd, mid, dup)
+    def send_command_with_mid(self, cmd, mid, dup, reason_code=0):
+        pkg = package.CommandWithMidPacket.build_package(cmd, mid, dup, reason_code=reason_code,
+                                                         proto_ver=self.proto_ver)
         self.write_data(pkg)
 
     async def _read_packet(self):

@@ -7,7 +7,7 @@ from collections import defaultdict
 from .utils import unpack_variable_byte_integer
 from .property import Property
 from .protocol import MQTTProtocol
-from .constants import MQTTCommands
+from .constants import MQTTCommands, PubAckReasonCode, PubRecReasonCode
 from .constants import MQTTv311, MQTTv50
 
 logger = logging.getLogger(__name__)
@@ -42,7 +42,7 @@ class MQTTConnectError(MQTTError):
 
 class EventCallback(object):
     def __init__(self, *args, **kwargs):
-        super(EventCallback, self).__init__(*args, **kwargs)
+        super(EventCallback, self).__init__()
 
         self._connected = asyncio.Event()
 
@@ -102,18 +102,24 @@ class MqttPackageHandler(EventCallback):
         self._messages_in = {}
         self._handler_cache = {}
         self._error = None
+        self._connection = None
 
-    def _send_command_with_mid(self, cmd, mid, dup):
+        if self.protocol_version == MQTTv50:
+            self._optimistic_acknowledgement = kwargs.get('optimistic_acknowledgement', True)
+        else:
+            self._optimistic_acknowledgement = True
+
+    def _send_command_with_mid(self, cmd, mid, dup, reason_code=0):
         raise NotImplementedError
 
-    def _send_puback(self, mid):
-        self._send_command_with_mid(MQTTCommands.PUBACK, mid, False)
+    def _send_puback(self, mid, reason_code=0):
+        self._send_command_with_mid(MQTTCommands.PUBACK, mid, False, reason_code=reason_code)
 
-    def _send_pubrec(self, mid):
-        self._send_command_with_mid(MQTTCommands.PUBREC, mid, False)
+    def _send_pubrec(self, mid, reason_code=0):
+        self._send_command_with_mid(MQTTCommands.PUBREC, mid, False, reason_code=reason_code)
 
-    def _send_pubrel(self, mid, dup):
-        self._send_command_with_mid(MQTTCommands.PUBREL | 2, mid, dup)
+    def _send_pubrel(self, mid, dup, reason_code=0):
+        self._send_command_with_mid(MQTTCommands.PUBREL | 2, mid, dup, reason_code=reason_code)
 
     def __get_handler__(self, cmd):
         cmd_type = cmd & 0xF0
@@ -236,11 +242,29 @@ class MqttPackageHandler(EventCallback):
         if qos == 0:
             self.on_message(self, print_topic, packet, qos, properties)
         elif qos == 1:
-            self._send_puback(mid)
-            self.on_message(self, print_topic, packet, qos, properties)
+            self._handle_qos_1_publish_packet(mid, packet, print_topic, properties)
         elif qos == 2:
+            self._handle_qos_2_publish_packet(mid, packet, print_topic, properties)
+
+    def _handle_qos_2_publish_packet(self, mid, packet, print_topic, properties):
+        if self._optimistic_acknowledgement:
             self._send_pubrec(mid)
-            self.on_message(self, print_topic, packet, qos, properties)
+            self.on_message(self, print_topic, packet, 2, properties)
+        else:
+            reason_code = self.on_message(self, print_topic, packet, 2, properties)
+            if reason_code not in (c.value for c in PubRecReasonCode):
+                raise ValueError('Invalid PUBREC reason code {}'.format(reason_code))
+            self._send_pubrec(mid, reason_code=reason_code)
+
+    def _handle_qos_1_publish_packet(self, mid, packet, print_topic, properties):
+        if self._optimistic_acknowledgement:
+            self._send_puback(mid)
+            self.on_message(self, print_topic, packet, 1, properties)
+        else:
+            reason_code = self.on_message(self, print_topic, packet, 1, properties)
+            if reason_code not in (c.value for c in PubAckReasonCode):
+                raise ValueError('Invalid PUBACK reason code {}'.format(reason_code))
+            self._send_puback(mid, reason_code=reason_code)
 
     def __call__(self, cmd, packet):
         try:

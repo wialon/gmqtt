@@ -16,7 +16,7 @@ RECONNECTION_SLEEP = 6
 
 class Client(MqttPackageHandler):
     def __init__(self, client_id, clean_session=True, transport='tcp', **kwargs):
-        super(Client, self).__init__()
+        super(Client, self).__init__(optimistic_acknowledgement=kwargs.pop('optimistic_acknowledgement', True))
         self._client_id = client_id or uuid.uuid4().hex
 
         self._clean_session = clean_session
@@ -31,7 +31,7 @@ class Client(MqttPackageHandler):
         self._port = None
 
         self._connect_properties = kwargs
-        self._connack_properties = None
+        self._connack_properties = {}
 
     @property
     def properties(self):
@@ -88,8 +88,8 @@ class Client(MqttPackageHandler):
     def _send_simple_command(self, cmd):
         self._connection.send_simple_command(cmd)
 
-    def _send_command_with_mid(self, cmd, mid, dup):
-        self._connection.send_command_with_mid(cmd, mid, dup)
+    def _send_command_with_mid(self, cmd, mid, dup, reason_code=0):
+        self._connection.send_command_with_mid(cmd, mid, dup, reason_code=reason_code)
 
     @property
     def protocol_version(self):
