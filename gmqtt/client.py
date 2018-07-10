@@ -44,14 +44,14 @@ class Client(MqttPackageHandler):
         if isinstance(self._password, str):
             self._password = password.encode()
 
-    async def connect(self, host, port=1883, clean_session=True, keepalive=60, version=MQTTv50):
+    async def connect(self, host, port=1883, keepalive=60, version=MQTTv50):
         # Init connection
         self._host = host
         self._port = port
 
         MQTTProtocol.proto_ver = version
 
-        self._connection = await self._create_connection(host, port=self._port, clean_session=clean_session, keepalive=keepalive)
+        self._connection = await self._create_connection(host, port=self._port, clean_session=self._clean_session, keepalive=keepalive)
 
         await self._connection.auth(self._client_id, self._username, self._password, **self._connect_properties)
         await self._connected.wait()
