@@ -1,5 +1,6 @@
 import struct
 import logging
+from typing import Tuple
 
 from .constants import MQTTCommands, MQTTv50
 from .property import Property
@@ -182,7 +183,7 @@ class PublishPacket(PackageFactory):
 
         packet.extend(message.payload)
 
-        return packet
+        return mid, packet
 
 
 class DisconnectPacket(PackageFactory):

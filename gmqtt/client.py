@@ -1,5 +1,6 @@
 import asyncio
 import json
+import heapq
 import logging
 import uuid
 
@@ -63,6 +64,45 @@ class Client(MqttPackageHandler):
 
         self._will_message = will_message
 
+        self._messages_query = []
+
+        self._retry_deliver_timeout = kwargs.get('retry_deliver_timeout', 5)
+
+        asyncio.ensure_future(self._resend_qos_messages())
+
+    def _remove_message_from_query(self, mid):
+        message = next(filter(lambda x: x[1] == mid, self._messages_query), None)
+
+        if message:
+            self._messages_query.remove(message)
+            self._messages_query = heapq.heapify(self._messages_query)
+        else:
+            logger.warning('[RECEIVED PUBACK FOR UNKNOWN MSG]')
+
+    async def _resend_qos_messages(self):
+        loop = asyncio.get_event_loop()
+
+        if not self._messages_query:
+            logger.debug('[QoS query IS EMPTY]')
+            await asyncio.sleep(self._retry_deliver_timeout)
+        else:
+            logger.debug('[Some msg need to resend]')
+            (tm, mid, package) = heapq.heappop(self._messages_query)
+            current_time = loop.time()
+
+            if current_time - tm > self._retry_deliver_timeout:
+                logger.debug('[TRY TO RESEND MSG] mid: %s', mid)
+                try:
+                    self._connection.send_package(package)
+                except Exception as exc:
+                    logger.error('[ERROR WHILE RESENDING] mid: %s', mid, exc_info=exc)
+            else:
+                await asyncio.sleep(self._retry_deliver_timeout)
+
+            heapq.heappush(self._messages_query, (current_time, mid, package))
+
+        asyncio.ensure_future(self._resend_qos_messages())
+
     @property
     def properties(self):
         # merge two dictionaries from connect and connack packages
@@ -117,11 +157,19 @@ class Client(MqttPackageHandler):
         self._connection.subsribe(topic, qos, **kwargs)
 
     def publish(self, message_or_topic, payload=None, qos=0, retain=False, **kwargs):
+        loop = asyncio.get_event_loop()
+
+
         if isinstance(message_or_topic, Message):
             message = message_or_topic
         else:
             message = Message(message_or_topic, payload, qos=qos, retain=retain, **kwargs)
-        self._connection.publish(message)
+
+        mid, package = self._connection.publish(message)
+
+        if qos > 0:
+            msg = (loop.time(), mid, package)
+            heapq.heappush(self._messages_query, msg)
 
     def _send_simple_command(self, cmd):
         self._connection.send_simple_command(cmd)
