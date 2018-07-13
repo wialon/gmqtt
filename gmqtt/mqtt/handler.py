@@ -112,6 +112,9 @@ class MqttPackageHandler(EventCallback):
     def _send_command_with_mid(self, cmd, mid, dup, reason_code=0):
         raise NotImplementedError
 
+    def _remove_message_from_query(self, mid):
+        raise NotImplementedError
+
     def _send_puback(self, mid, reason_code=0):
         self._send_command_with_mid(MQTTCommands.PUBACK, mid, False, reason_code=reason_code)
 
@@ -184,7 +187,7 @@ class MqttPackageHandler(EventCallback):
             else:
                 self._error = MQTTConnectError(result)
                 asyncio.ensure_future(self.reconnect())
-                return 
+                return
         else:
             self.failed_connections = 0
 
@@ -291,7 +294,11 @@ class MqttPackageHandler(EventCallback):
         logger.info('[PONG REQUEST] %s %s', hex(cmd), packet)
 
     def _handle_puback_packet(self, cmd, packet):
-        pass
+        (mid, lsb) = struct.unpack("!HH", packet)
+
+        logger.info('[RECEIVED PUBACK FOR] %s', mid)
+
+        self._remove_message_from_query(mid)
 
     def _handle_pubcomp_packet(self, cmd, packet):
         pass
