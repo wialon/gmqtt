@@ -1,6 +1,7 @@
 import json
 import struct
 import logging
+from typing import Tuple
 
 from .constants import MQTTCommands, MQTTv50
 from .property import Property
@@ -148,7 +149,7 @@ class SimpleCommandPacket(PackageFactory):
 
 class PublishPacket(PackageFactory):
     @classmethod
-    def build_package(cls, topic, payload, qos, retain, protocol, dup=False, **kwargs) -> bytes:
+    def build_package(cls, topic, payload, qos, retain, protocol, dup=False, **kwargs) -> Tuple[int, bytearray]:
         command = MQTTCommands.PUBLISH | ((dup & 0x1) << 3) | (qos << 1) | (retain & 0x1)
         packet = bytearray()
         packet.append(command)
@@ -193,7 +194,7 @@ class PublishPacket(PackageFactory):
 
         packet.extend(payload)
 
-        return packet
+        return mid, packet
 
 
 class CommandWithMidPacket(PackageFactory):

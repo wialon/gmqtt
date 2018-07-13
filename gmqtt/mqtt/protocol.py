@@ -60,7 +60,6 @@ class BaseMQTTProtocol(asyncio.StreamReaderProtocol):
         return bs
 
 
-
 class MQTTProtocol(BaseMQTTProtocol):
     proto_name = b'MQTT'
     proto_ver = MQTTv50
@@ -94,8 +93,10 @@ class MQTTProtocol(BaseMQTTProtocol):
         self.send_simple_command_packet(MQTTCommands.PINGREQ)
 
     def send_publish(self, topic, payload, qos, retain, **kwargs):
-        pkg = package.PublishPacket.build_package(topic, payload, qos, retain, self, **kwargs)
+        mid, pkg = package.PublishPacket.build_package(topic, payload, qos, retain, self, **kwargs)
         self.write_data(pkg)
+
+        return mid, pkg
 
     def send_command_with_mid(self, cmd, mid, dup, reason_code=0):
         pkg = package.CommandWithMidPacket.build_package(cmd, mid, dup, reason_code=reason_code,

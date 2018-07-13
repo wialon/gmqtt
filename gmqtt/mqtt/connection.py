@@ -39,14 +39,20 @@ class MQTTConnection(object):
     def send_package(self, package):
         # This is not blocking operation, because transport place the data
         # to the buffer, and this buffer flushing async
-        self._transport.write(package.encode())
+
+        if isinstance(package, (bytes, bytearray)):
+            package = package
+        else:
+            package = package.encode()
+
+        self._transport.write(package)
 
     async def auth(self, client_id, username, password, **kwargs):
         await self._protocol.send_auth_package(client_id, username, password, self._clean_session,
                                                self._keepalive, **kwargs)
 
     def publish(self, topic, payload, qos, retain, **kwargs):
-        self._protocol.send_publish(topic, payload, qos, retain, **kwargs)
+        return self._protocol.send_publish(topic, payload, qos, retain, **kwargs)
 
     def subsribe(self, topic, qos, **kwargs):
         self._protocol.send_subscribe_packet(topic, qos, **kwargs)
