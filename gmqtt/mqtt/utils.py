@@ -1,4 +1,58 @@
 import struct
+import logging
+
+
+logger = logging.getLogger(__name__)
+
+
+class Singleton(type):
+    _instances = {}
+
+    def __call__(cls, *args, **kwargs):
+        if cls not in cls._instances:
+            cls._instances[cls] = super(Singleton, cls).__call__(*args, **kwargs)
+        return cls._instances[cls]
+
+
+class IdGenerator(object, metaclass=Singleton):
+    def __init__(self, max=65536):
+        self._max = max
+        self._used_ids = set()
+        self._last_used_id = 0
+
+    def _mid_generate(self):
+        done = False
+
+        while not done:
+            if len(self._used_ids) >= self._max - 1:
+                raise OverflowError("All ids has already used. May be your QoS query is full.")
+
+            self._last_used_id += 1
+
+            if self._last_used_id in self._used_ids:
+                continue
+
+            if self._last_used_id == self._max:
+                self._last_used_id = 0
+                continue
+
+            done = True
+
+        self._used_ids.add(self._last_used_id)
+        return self._last_used_id
+
+    def free_id(self, id):
+        logger.debug('FREE MID: %s', id)
+        if id not in self._used_ids:
+            return
+
+        self._used_ids.remove(id)
+
+    def next_id(self):
+        id = self._mid_generate()
+
+        logger.debug("NEW ID: %s", id)
+        return id
 
 
 def pack_variable_byte_integer(value):

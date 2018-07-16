@@ -96,10 +96,10 @@ class Client(MqttPackageHandler):
                     self._connection.send_package(package)
                 except Exception as exc:
                     logger.error('[ERROR WHILE RESENDING] mid: %s', mid, exc_info=exc)
+                heapq.heappush(self._messages_query, (current_time, mid, package))
             else:
+                heapq.heappush(self._messages_query, (tm, mid, package))
                 await asyncio.sleep(self._retry_deliver_timeout)
-
-            heapq.heappush(self._messages_query, (current_time, mid, package))
 
         asyncio.ensure_future(self._resend_qos_messages())
 
