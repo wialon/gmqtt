@@ -41,12 +41,15 @@ class MQTTConnection(object):
         # to the buffer, and this buffer flushing async
         self._transport.write(package.encode())
 
-    async def auth(self, client_id, username, password, **kwargs):
+    async def auth(self, client_id, username, password, will_message=None, **kwargs):
         await self._protocol.send_auth_package(client_id, username, password, self._clean_session,
-                                               self._keepalive, **kwargs)
+                                               self._keepalive, will_message=will_message, **kwargs)
 
-    def publish(self, topic, payload, qos, retain, **kwargs):
-        self._protocol.send_publish(topic, payload, qos, retain, **kwargs)
+    def publish(self, message):
+        self._protocol.send_publish(message)
+
+    def send_disconnect(self, reason_code=0, **properties):
+        self._protocol.send_disconnect(reason_code=reason_code, **properties)
 
     def subsribe(self, topic, qos, **kwargs):
         self._protocol.send_subscribe_packet(topic, qos, **kwargs)
