@@ -32,6 +32,8 @@ class Message:
             self.payload = payload.encode()
         elif payload is None:
             self.payload = b''
+        else:
+            self.payload = payload
 
         self.payload_size = len(payload)
 
