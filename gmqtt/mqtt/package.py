@@ -148,7 +148,7 @@ class SimpleCommandPacket(PackageFactory):
 
 class PublishPacket(PackageFactory):
     @classmethod
-    def build_package(cls, message, protocol) -> bytes:
+    def build_package(cls, message, protocol) -> Tuple[int, bytes]:
         command = MQTTCommands.PUBLISH | ((message.dup & 0x1) << 3) | (message.qos << 1) | (message.retain & 0x1)
         packet = bytearray()
         packet.append(command)
@@ -161,8 +161,6 @@ class PublishPacket(PackageFactory):
             logger.debug("Sending PUBLISH (q%d), '%s' (NULL payload)", message.qos, message.topic)
         else:
             logger.debug("Sending PUBLISH (q%d), '%s', ... (%d bytes)", message.qos, message.topic, message.payload_size)
-
-        mid = cls._mid_generate()
 
         if message.qos > 0:
             # For message id
