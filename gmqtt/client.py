@@ -1,6 +1,6 @@
 import asyncio
 import json
-import heapq
+
 import logging
 import uuid
 
