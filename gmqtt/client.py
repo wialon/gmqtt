@@ -73,6 +73,7 @@ class Client(MqttPackageHandler):
         asyncio.ensure_future(self._resend_qos_messages())
 
     def _remove_message_from_query(self, mid):
+
         logger.debug('[REMOVE MESSAGE] %s', mid)
         asyncio.ensure_future(
             self._persistent_storage.remove_message_by_mid(mid)
@@ -95,6 +96,7 @@ class Client(MqttPackageHandler):
                     self._connection.send_package(package)
                 except Exception as exc:
                     logger.error('[ERROR WHILE RESENDING] mid: %s', mid, exc_info=exc)
+
                 await asyncio.sleep(0.001)
                 await self._persistent_storage.push_message(mid, package)
             else:

@@ -150,6 +150,7 @@ class PublishPacket(PackageFactory):
     @classmethod
     def build_package(cls, message, protocol) -> Tuple[int, bytes]:
         command = MQTTCommands.PUBLISH | ((message.dup & 0x1) << 3) | (message.qos << 1) | (message.retain & 0x1)
+
         packet = bytearray()
         packet.append(command)
 

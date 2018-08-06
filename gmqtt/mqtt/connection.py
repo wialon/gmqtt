@@ -39,7 +39,6 @@ class MQTTConnection(object):
     def send_package(self, package):
         # This is not blocking operation, because transport place the data
         # to the buffer, and this buffer flushing async
-
         if isinstance(package, (bytes, bytearray)):
             package = package
         else:
