@@ -1,4 +1,3 @@
-import json
 import struct
 import logging
 from typing import Tuple
@@ -58,17 +57,17 @@ class PackageFactory(object):
 
 class LoginPackageFactor(PackageFactory):
     @classmethod
-    def build_package(cls, client_id, username, password, clean_session, keepalive, protocol, **kwargs):
+    def build_package(cls, client_id, username, password, clean_session, keepalive, protocol, will_message=None, **kwargs):
         remaining_length = 2 + len(protocol.proto_name) + 1 + 1 + 2 + 2 + len(client_id)
 
         connect_flags = 0
         if clean_session:
             connect_flags |= 0x02
 
-        # TODO: does we need this?
-        # if cls._will:
-        #     remaining_length += 2 + len(cls._will_topic) + 2 + len(cls._will_payload)
-        #     connect_flags |= 0x04 | ((cls._will_qos & 0x03) << 3) | ((cls._will_retain & 0x01) << 5)
+        if will_message:
+            will_prop_bytes = cls._build_properties_data(will_message.properties, protocol.proto_ver)
+            remaining_length += 2 + len(will_message.topic) + 2 + len(will_message.payload) + len(will_prop_bytes)
+            connect_flags |= 0x04 | ((will_message.qos & 0x03) << 3) | ((will_message.retain & 0x01) << 5)
 
         if username is not None:
             remaining_length += 2 + len(username)
@@ -95,6 +94,11 @@ class LoginPackageFactor(PackageFactory):
         packet.extend(prop_bytes)
 
         cls._pack_str16(packet, client_id)
+
+        if will_message:
+            packet += will_prop_bytes
+            cls._pack_str16(packet, will_message.topic)
+            cls._pack_str16(packet, will_message.payload)
 
         if username is not None:
             cls._pack_str16(packet, username)
@@ -144,43 +148,29 @@ class SimpleCommandPacket(PackageFactory):
 
 class PublishPacket(PackageFactory):
     @classmethod
-    def build_package(cls, topic, payload, qos, retain, protocol, dup=False, **kwargs) -> Tuple[int, bytearray]:
-        command = MQTTCommands.PUBLISH | ((dup & 0x1) << 3) | (qos << 1) | (retain & 0x1)
+    def build_package(cls, message, protocol) -> Tuple[int, bytes]:
+        command = MQTTCommands.PUBLISH | ((message.dup & 0x1) << 3) | (message.qos << 1) | (message.retain & 0x1)
+
         packet = bytearray()
         packet.append(command)
 
-        if isinstance(payload, dict):
-            payload = json.dumps(payload)
-
-        if isinstance(payload, (int, float)):
-            payload = str(payload).encode('ascii')
-        elif isinstance(payload, str):
-            payload = payload.encode()
-        elif payload is None:
-            payload = b''
-
-        payload_size = len(payload)
-
-        if payload_size > 268435455:
-            raise ValueError('Payload too large.')
-
-        remaining_length = 2 + len(topic) + payload_size
-        prop_bytes = cls._build_properties_data(kwargs, protocol_version=protocol.proto_ver)
+        remaining_length = 2 + len(message.topic) + message.payload_size
+        prop_bytes = cls._build_properties_data(message.properties, protocol_version=protocol.proto_ver)
         remaining_length += len(prop_bytes)
 
-        if payload_size == 0:
-            logger.debug("Sending PUBLISH (q%d), '%s' (NULL payload)", qos, topic)
+        if message.payload_size == 0:
+            logger.debug("Sending PUBLISH (q%d), '%s' (NULL payload)", message.qos, message.topic)
         else:
-            logger.debug("Sending PUBLISH (q%d), '%s', ... (%d bytes)", qos, topic, payload_size)
+            logger.debug("Sending PUBLISH (q%d), '%s', ... (%d bytes)", message.qos, message.topic, message.payload_size)
 
-        if qos > 0:
+        if message.qos > 0:
             # For message id
             remaining_length += 2
 
         packet.extend(pack_variable_byte_integer(remaining_length))
-        cls._pack_str16(packet, topic)
+        cls._pack_str16(packet, message.topic)
 
-        if qos > 0:
+        if message.qos > 0:
             # For message id
             mid = cls.id_generator.next_id()
             packet.extend(struct.pack("!H", mid))
@@ -188,9 +178,17 @@ class PublishPacket(PackageFactory):
             mid = None
         packet.extend(prop_bytes)
 
-        packet.extend(payload)
+        packet.extend(message.payload)
 
         return mid, packet
+
+
+class DisconnectPacket(PackageFactory):
+    @classmethod
+    def build_package(cls, protocol, reason_code=0, **properties):
+        prop_bytes = cls._build_properties_data(properties, protocol_version=protocol.proto_ver)
+        remaining_length = 1 + len(prop_bytes)
+        return struct.pack('!BBB', MQTTCommands.DISCONNECT.value, remaining_length, reason_code) + prop_bytes
 
 
 class CommandWithMidPacket(PackageFactory):

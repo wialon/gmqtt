@@ -76,9 +76,10 @@ class MQTTProtocol(BaseMQTTProtocol):
         super().connection_made(transport)
         self._read_loop_future = asyncio.ensure_future(self._read_loop())
 
-    async def send_auth_package(self, client_id, username, password, clean_session, keepalive, **kwargs):
+    async def send_auth_package(self, client_id, username, password, clean_session, keepalive,
+                                will_message=None, **kwargs):
         pkg = package.LoginPackageFactor.build_package(client_id, username, password, clean_session,
-                                                       keepalive, self, **kwargs)
+                                                       keepalive, self, will_message=will_message, **kwargs)
         self.write_data(pkg)
 
     def send_subscribe_packet(self, topic, qos, **kwargs):
@@ -92,8 +93,15 @@ class MQTTProtocol(BaseMQTTProtocol):
     def send_ping_request(self):
         self.send_simple_command_packet(MQTTCommands.PINGREQ)
 
-    def send_publish(self, topic, payload, qos, retain, **kwargs):
-        mid, pkg = package.PublishPacket.build_package(topic, payload, qos, retain, self, **kwargs)
+    def send_publish(self, message):
+        mid, pkg = package.PublishPacket.build_package(message, self)
+        self.write_data(pkg)
+
+        return mid, pkg
+
+    def send_disconnect(self, reason_code=0, **properties):
+        pkg = package.DisconnectPacket.build_package(self, reason_code=reason_code, **properties)
+
         self.write_data(pkg)
 
         return mid, pkg
