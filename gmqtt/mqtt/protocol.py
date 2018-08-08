@@ -104,7 +104,7 @@ class MQTTProtocol(BaseMQTTProtocol):
 
         self.write_data(pkg)
 
-        return mid, pkg
+        return pkg
 
     def send_command_with_mid(self, cmd, mid, dup, reason_code=0):
         pkg = package.CommandWithMidPacket.build_package(cmd, mid, dup, reason_code=reason_code,
