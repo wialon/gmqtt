@@ -1,5 +1,6 @@
 import asyncio
 import json
+
 import logging
 import uuid
 
@@ -7,6 +8,9 @@ from .mqtt.protocol import MQTTProtocol
 from .mqtt.connection import MQTTConnection
 from .mqtt.handler import MqttPackageHandler
 from .mqtt.constants import MQTTv311, MQTTv50
+
+
+from .storage import HeapPersistentStorage
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +67,43 @@ class Client(MqttPackageHandler):
 
         self._will_message = will_message
 
+        self._retry_deliver_timeout = kwargs.pop('retry_deliver_timeout', 5)
+        self._persistent_storage = kwargs.pop('persistent_storage', HeapPersistentStorage(self._retry_deliver_timeout))
+
+        asyncio.ensure_future(self._resend_qos_messages())
+
+    def _remove_message_from_query(self, mid):
+
+        logger.debug('[REMOVE MESSAGE] %s', mid)
+        asyncio.ensure_future(
+            self._persistent_storage.remove_message_by_mid(mid)
+        )
+
+    async def _resend_qos_messages(self):
+        await self._connected.wait()
+
+        if await self._persistent_storage.is_empty:
+            logger.debug('[QoS query IS EMPTY]')
+            await asyncio.sleep(self._retry_deliver_timeout)
+        else:
+            logger.debug('[Some msg need to resend]')
+            msg = await self._persistent_storage.pop_message()
+
+            if msg:
+                (mid, package) = msg
+
+                try:
+                    self._connection.send_package(package)
+                except Exception as exc:
+                    logger.error('[ERROR WHILE RESENDING] mid: %s', mid, exc_info=exc)
+
+                await asyncio.sleep(0.001)
+                await self._persistent_storage.push_message(mid, package)
+            else:
+                await asyncio.sleep(self._retry_deliver_timeout)
+
+        asyncio.ensure_future(self._resend_qos_messages())
+
     @property
     def properties(self):
         # merge two dictionaries from connect and connack packages
@@ -87,6 +128,10 @@ class Client(MqttPackageHandler):
         await self._connection.auth(self._client_id, self._username, self._password, will_message=self._will_message,
                                     **self._connect_properties)
         await self._connected.wait()
+
+        loop = asyncio.get_event_loop()
+        while not await self._persistent_storage.is_empty:
+            await loop.create_future()
 
         if self._error:
             raise self._error
@@ -117,11 +162,17 @@ class Client(MqttPackageHandler):
         self._connection.subsribe(topic, qos, **kwargs)
 
     def publish(self, message_or_topic, payload=None, qos=0, retain=False, **kwargs):
+        loop = asyncio.get_event_loop()
+
         if isinstance(message_or_topic, Message):
             message = message_or_topic
         else:
             message = Message(message_or_topic, payload, qos=qos, retain=retain, **kwargs)
-        self._connection.publish(message)
+
+        mid, package = self._connection.publish(message)
+
+        if qos > 0:
+            self._persistent_storage.push_message_nowait(mid, package)
 
     def _send_simple_command(self, cmd):
         self._connection.send_simple_command(cmd)

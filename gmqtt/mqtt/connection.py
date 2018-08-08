@@ -39,14 +39,19 @@ class MQTTConnection(object):
     def send_package(self, package):
         # This is not blocking operation, because transport place the data
         # to the buffer, and this buffer flushing async
-        self._transport.write(package.encode())
+        if isinstance(package, (bytes, bytearray)):
+            package = package
+        else:
+            package = package.encode()
+
+        self._transport.write(package)
 
     async def auth(self, client_id, username, password, will_message=None, **kwargs):
         await self._protocol.send_auth_package(client_id, username, password, self._clean_session,
                                                self._keepalive, will_message=will_message, **kwargs)
 
     def publish(self, message):
-        self._protocol.send_publish(message)
+        return self._protocol.send_publish(message)
 
     def send_disconnect(self, reason_code=0, **properties):
         self._protocol.send_disconnect(reason_code=reason_code, **properties)

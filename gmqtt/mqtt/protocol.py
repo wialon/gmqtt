@@ -94,12 +94,17 @@ class MQTTProtocol(BaseMQTTProtocol):
         self.send_simple_command_packet(MQTTCommands.PINGREQ)
 
     def send_publish(self, message):
-        pkg = package.PublishPacket.build_package(message, self)
+        mid, pkg = package.PublishPacket.build_package(message, self)
         self.write_data(pkg)
+
+        return mid, pkg
 
     def send_disconnect(self, reason_code=0, **properties):
         pkg = package.DisconnectPacket.build_package(self, reason_code=reason_code, **properties)
+
         self.write_data(pkg)
+
+        return pkg
 
     def send_command_with_mid(self, cmd, mid, dup, reason_code=0):
         pkg = package.CommandWithMidPacket.build_package(cmd, mid, dup, reason_code=reason_code,

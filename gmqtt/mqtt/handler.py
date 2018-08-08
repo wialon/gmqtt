@@ -4,7 +4,7 @@ import struct
 import time
 from collections import defaultdict
 
-from .utils import unpack_variable_byte_integer
+from .utils import unpack_variable_byte_integer, IdGenerator
 from .property import Property
 from .protocol import MQTTProtocol
 from .constants import MQTTCommands, PubAckReasonCode, PubRecReasonCode
@@ -104,12 +104,17 @@ class MqttPackageHandler(EventCallback):
         self._error = None
         self._connection = None
 
+        self._id_generator = IdGenerator()
+
         if self.protocol_version == MQTTv50:
             self._optimistic_acknowledgement = kwargs.get('optimistic_acknowledgement', True)
         else:
             self._optimistic_acknowledgement = True
 
     def _send_command_with_mid(self, cmd, mid, dup, reason_code=0):
+        raise NotImplementedError
+
+    def _remove_message_from_query(self, mid):
         raise NotImplementedError
 
     def _send_puback(self, mid, reason_code=0):
@@ -184,7 +189,7 @@ class MqttPackageHandler(EventCallback):
             else:
                 self._error = MQTTConnectError(result)
                 asyncio.ensure_future(self.reconnect())
-                return 
+                return
         else:
             self.failed_connections = 0
 
@@ -241,6 +246,7 @@ class MqttPackageHandler(EventCallback):
 
         if qos == 0:
             self.on_message(self, print_topic, packet, qos, properties)
+            self._id_generator.free_id(mid)
         elif qos == 1:
             self._handle_qos_1_publish_packet(mid, packet, print_topic, properties)
         elif qos == 2:
@@ -256,6 +262,8 @@ class MqttPackageHandler(EventCallback):
                 raise ValueError('Invalid PUBREC reason code {}'.format(reason_code))
             self._send_pubrec(mid, reason_code=reason_code)
 
+        self._id_generator.free_id(mid)
+
     def _handle_qos_1_publish_packet(self, mid, packet, print_topic, properties):
         if self._optimistic_acknowledgement:
             self._send_puback(mid)
@@ -265,6 +273,8 @@ class MqttPackageHandler(EventCallback):
             if reason_code not in (c.value for c in PubAckReasonCode):
                 raise ValueError('Invalid PUBACK reason code {}'.format(reason_code))
             self._send_puback(mid, reason_code=reason_code)
+
+        self._id_generator.free_id(mid)
 
     def __call__(self, cmd, packet):
         try:
@@ -283,6 +293,8 @@ class MqttPackageHandler(EventCallback):
         logger.info('[SUBACK] %s %s', mid, granted_qos)
         self.on_subscribe(self, mid, granted_qos)
 
+        self._id_generator.free_id(mid)
+
     def _handle_pingreq_packet(self, cmd, packet):
         logger.info('[PING REQUEST] %s %s', hex(cmd), packet)
         pass
@@ -291,7 +303,12 @@ class MqttPackageHandler(EventCallback):
         logger.info('[PONG REQUEST] %s %s', hex(cmd), packet)
 
     def _handle_puback_packet(self, cmd, packet):
-        pass
+        (mid, lsb) = struct.unpack("!HH", packet)
+
+        logger.info('[RECEIVED PUBACK FOR] %s', mid)
+
+        self._id_generator.free_id(mid)
+        self._remove_message_from_query(mid)
 
     def _handle_pubcomp_packet(self, cmd, packet):
         pass
@@ -301,6 +318,7 @@ class MqttPackageHandler(EventCallback):
 
     def _handle_pubrel_packet(self, cmd, packet):
         mid, = struct.unpack("!H", packet)
+        self._id_generator.free_id(mid)
 
         if mid not in self._messages_in:
             return

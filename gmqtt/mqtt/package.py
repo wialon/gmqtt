@@ -1,13 +1,15 @@
 import struct
 import logging
+from typing import Tuple
 
 from .constants import MQTTCommands, MQTTv50
 from .property import Property
-from .utils import pack_variable_byte_integer
+from .utils import pack_variable_byte_integer, IdGenerator
 
 logger = logging.getLogger(__name__)
 
 LAST_MID = 0
+USED_IDS = set()
 
 
 class Packet(object):
@@ -19,6 +21,8 @@ class Packet(object):
 
 
 class PackageFactory(object):
+    id_generator = IdGenerator()
+
     @classmethod
     async def parse_package(cls, cmd, package):
         pass
@@ -33,14 +37,6 @@ class PackageFactory(object):
             data = data.encode('utf-8')
         packet.extend(struct.pack("!H", len(data)))
         packet.extend(data)
-
-    @classmethod
-    def _mid_generate(cls):
-        global LAST_MID
-        LAST_MID += 1
-        if LAST_MID == 65536:
-            LAST_MID = 1
-        return LAST_MID
 
     @classmethod
     def _build_properties_data(cls, properties_dict, protocol_version):
@@ -132,7 +128,7 @@ class SubscribePacket(PackageFactory):
         packet = bytearray()
         packet.append(command)
         packet.extend(pack_variable_byte_integer(remaining_length))
-        local_mid = cls._mid_generate()
+        local_mid = cls.id_generator.next_id()
         packet.extend(struct.pack("!H", local_mid))
         packet.extend(properties)
         for t in topics:
@@ -152,8 +148,9 @@ class SimpleCommandPacket(PackageFactory):
 
 class PublishPacket(PackageFactory):
     @classmethod
-    def build_package(cls, message, protocol) -> bytes:
+    def build_package(cls, message, protocol) -> Tuple[int, bytes]:
         command = MQTTCommands.PUBLISH | ((message.dup & 0x1) << 3) | (message.qos << 1) | (message.retain & 0x1)
+
         packet = bytearray()
         packet.append(command)
 
@@ -166,8 +163,6 @@ class PublishPacket(PackageFactory):
         else:
             logger.debug("Sending PUBLISH (q%d), '%s', ... (%d bytes)", message.qos, message.topic, message.payload_size)
 
-        mid = cls._mid_generate()
-
         if message.qos > 0:
             # For message id
             remaining_length += 2
@@ -177,12 +172,15 @@ class PublishPacket(PackageFactory):
 
         if message.qos > 0:
             # For message id
+            mid = cls.id_generator.next_id()
             packet.extend(struct.pack("!H", mid))
+        else:
+            mid = None
         packet.extend(prop_bytes)
 
         packet.extend(message.payload)
 
-        return packet
+        return mid, packet
 
 
 class DisconnectPacket(PackageFactory):
