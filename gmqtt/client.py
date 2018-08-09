@@ -27,7 +27,7 @@ class Message:
         self.dup = False
         self.properties = kwargs
 
-        if isinstance(payload, dict):
+        if isinstance(payload, (list, tuple, dict)):
             payload = json.dumps(payload)
 
         if isinstance(payload, (int, float)):
@@ -39,7 +39,7 @@ class Message:
         else:
             self.payload = payload
 
-        self.payload_size = len(payload)
+        self.payload_size = len(self.payload)
 
         if self.payload_size > 268435455:
             raise ValueError('Payload too large.')
@@ -150,7 +150,7 @@ class Client(MqttPackageHandler):
         await asyncio.sleep(RECONNECTION_SLEEP)
         self._connection = await self._create_connection(self._host, self._port, clean_session=True, keepalive=60)
         await self._connection.auth(self._client_id, self._username, self._password,
-                                    will_message=self._will_message,**self._connect_properties)
+                                    will_message=self._will_message, **self._connect_properties)
 
     async def disconnect(self, reason_code=0, **properties):
         self._reconnect = False
