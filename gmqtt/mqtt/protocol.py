@@ -54,9 +54,13 @@ class BaseMQTTProtocol(asyncio.StreamReaderProtocol):
 
     async def read(self, n=-1):
         bs = await self._stream_reader.read(n=n)
-        if not bs:
-            logger.warning('[READ] no data received, breaking connection')
-            self.connection_lost(None)
+
+        # so we don't receive anything but connection is not closed -
+        # let's close it manually
+        if not bs and not self._transport.is_closing():
+            self._transport.close()
+            # self.connection_lost(ConnectionResetError())
+            raise ConnectionResetError("Reset connection manually.")
         return bs
 
 
@@ -142,12 +146,16 @@ class MQTTProtocol(BaseMQTTProtocol):
         await self._connected.wait()
 
         while self._connected.is_set():
-            byte = await self.read(1)
-            if not byte:
-                continue
-            command, = struct.unpack("!B", byte)
-            packet = await self._read_packet()
-            self._connection.put_package((command, packet))
+            try:
+                byte = await self.read(1)
+                command, = struct.unpack("!B", byte)
+                packet = await self._read_packet()
+                self._connection.put_package((command, packet))
+            except ConnectionResetError as exc:
+                # This connection will be closed, because we received the empty data.
+                # So we can safely break the while
+                logger.debug("[RECV EMPTY] Connection will be reset automatically.")
+                break
 
     def connection_lost(self, exc):
         super(MQTTProtocol, self).connection_lost(exc)
