@@ -148,7 +148,14 @@ class Client(MqttPackageHandler):
             logger.error('[DISCONNECTED] max number of failed connection attempts achieved')
             return
         await asyncio.sleep(RECONNECTION_SLEEP)
-        self._connection = await self._create_connection(self._host, self._port, clean_session=True, keepalive=60)
+        try:
+            self._connection = await self._create_connection(self._host, self._port, clean_session=True, keepalive=60)
+        except OSError as exc:
+            self.failed_connections += 1
+            logger.warning("[CAN'T RECONNECT] %s", self.failed_connections)
+            asyncio.ensure_future(self.reconnect())
+            return
+
         await self._connection.auth(self._client_id, self._username, self._password,
                                     will_message=self._will_message, **self._connect_properties)
 
