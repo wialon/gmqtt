@@ -303,7 +303,9 @@ class MqttPackageHandler(EventCallback):
         logger.info('[PONG REQUEST] %s %s', hex(cmd), packet)
 
     def _handle_puback_packet(self, cmd, packet):
-        (mid, lsb) = struct.unpack("!HH", packet)
+        (mid, ) = struct.unpack("!H", packet[:2])
+
+        # TODO: For MQTT 5.0 parse reason code and properties
 
         logger.info('[RECEIVED PUBACK FOR] %s', mid)
 
