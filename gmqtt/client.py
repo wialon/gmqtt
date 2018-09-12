@@ -55,6 +55,7 @@ class Client(MqttPackageHandler):
         self._transport = transport
 
         self._connection = None
+        self._keepalive = 60
 
         self._username = None
         self._password = None
@@ -119,6 +120,7 @@ class Client(MqttPackageHandler):
         # Init connection
         self._host = host
         self._port = port
+        self._keepalive = keepalive
 
         MQTTProtocol.proto_ver = version
 
@@ -149,7 +151,7 @@ class Client(MqttPackageHandler):
             return
         await asyncio.sleep(RECONNECTION_SLEEP)
         try:
-            self._connection = await self._create_connection(self._host, self._port, clean_session=True, keepalive=60)
+            self._connection = await self._create_connection(self._host, self._port, clean_session=False, keepalive=self._keepalive)
         except OSError as exc:
             self.failed_connections += 1
             logger.warning("[CAN'T RECONNECT] %s", self.failed_connections)

@@ -29,7 +29,7 @@ class MQTTConnection(object):
     def _keep_connection(self):
         if self.is_closing():
             return
-        if time.monotonic() - self._last_data_in > self._keepalive:
+        if time.monotonic() - self._last_data_in >= self._keepalive:
             self._send_ping_request()
         self._keep_connection_callback = asyncio.get_event_loop().call_later(self._keepalive, self._keep_connection)
 
