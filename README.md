@@ -143,3 +143,6 @@ client.publish('TEST/TIME', str(time.time()), qos=1, retain=True, message_expiry
 
 ##### Subscribe properties
 * `subscription_identifier` - `int` If the Client specified a Subscription Identifier for any of the overlapping subscriptions the Server MUST send those Subscription Identifiers in the message which is published as the result of the subscriptions.
+
+### Other examples
+Check [examples directory](examples) for more use cases.
