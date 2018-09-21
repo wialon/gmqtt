@@ -109,6 +109,36 @@ class LoginPackageFactor(PackageFactory):
         return packet
 
 
+class UnsubscribePacket(PackageFactory):
+    @classmethod
+    def build_package(cls, topic, protocol, **kwargs) -> bytes:
+        remaining_length = 2
+        if not isinstance(topic, (list, tuple)):
+            topics = [topic]
+        else:
+            topics = topic
+
+        for t in topics:
+            remaining_length += 2 + len(t)
+
+        properties = cls._build_properties_data(kwargs, protocol.proto_ver)
+        remaining_length += len(properties)
+
+        command = MQTTCommands.UNSUBSCRIBE | 0x2
+        packet = bytearray()
+        packet.append(command)
+        packet.extend(pack_variable_byte_integer(remaining_length))
+        local_mid = cls.id_generator.next_id()
+        packet.extend(struct.pack("!H", local_mid))
+        packet.extend(properties)
+        for t in topics:
+            cls._pack_str16(packet, t)
+
+        logger.info('[SEND UNSUB] %s', topics)
+
+        return packet
+
+
 class SubscribePacket(PackageFactory):
     @classmethod
     def build_package(cls, topic, qos, protocol, **kwargs) -> bytes:

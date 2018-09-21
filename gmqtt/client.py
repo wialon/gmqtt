@@ -71,6 +71,8 @@ class Client(MqttPackageHandler):
         self._retry_deliver_timeout = kwargs.pop('retry_deliver_timeout', 5)
         self._persistent_storage = kwargs.pop('persistent_storage', HeapPersistentStorage(self._retry_deliver_timeout))
 
+        self._topic_alias_maximum = kwargs.get('topic_alias_maximum', 0)
+
         asyncio.ensure_future(self._resend_qos_messages())
 
     def _remove_message_from_query(self, mid):
@@ -168,7 +170,10 @@ class Client(MqttPackageHandler):
             await self._connection.close()
 
     def subscribe(self, topic, qos=0, **kwargs):
-        self._connection.subsribe(topic, qos, **kwargs)
+        self._connection.subscribe(topic, qos, **kwargs)
+
+    def unsubscribe(self, topic, **kwargs):
+        self._connection.unsubscribe(topic, **kwargs)
 
     def publish(self, message_or_topic, payload=None, qos=0, retain=False, **kwargs):
         loop = asyncio.get_event_loop()
