@@ -83,7 +83,7 @@ gmqtt supports MQTT version 5.0 protocol
 #### Version setup
 Version 5.0 is used by default. If your broker does not support 5.0 protocol version, client will downgrade to 3.1 and reconnect automatically, but you can also force version in connect method:
 ```python
-from gmqtt.constants import MQTTv311
+from gmqtt.mqtt.constants import MQTTv311
 client = MQTTClient('clientid')
 client.set_auth_credentials(token, None)
 await client.connect(broker_host, 1883, keepalive=60, version=MQTTv311)
