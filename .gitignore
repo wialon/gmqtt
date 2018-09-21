@@ -3,3 +3,12 @@
 .idea
 gmqtt.egg-info
 dist/
+
+# virtualenvs
+env/
+pyenv/
+
+# pytest
+.coverage
+.pytest_cache/
+htmlcov/
