@@ -1,3 +1,4 @@
+[![Build Status](https://travis-ci.com/Lenka42/gmqtt.svg?branch=master)](https://travis-ci.com/Lenka42/gmqtt)
 ### Python MQTT client implementation.
 
 
