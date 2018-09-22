@@ -181,3 +181,26 @@ async def test_unsubscribe(init_clients):
 
     assert len(callback2.messages) == 2
 
+
+@pytest.mark.asyncio
+async def test_overlapping_subscriptions(init_clients):
+    aclient, callback, bclient, callback2 = init_clients
+    await bclient.connect(host=host, port=port)
+    await aclient.connect(host=host, port=port)
+
+    aclient.subscribe(TOPICS[3], qos=2, subscription_identifier=21)
+    aclient.subscribe(WILDTOPICS[6], qos=1, subscription_identifier=42)
+    await asyncio.sleep(1)
+    print(TOPICS[3], WILDTOPICS[6])
+    bclient.publish(TOPICS[3], b"overlapping topic filters", 2)
+    await asyncio.sleep(1)
+    assert len(callback.messages) in [1, 2]
+    if len(callback.messages) == 1:
+        print("This server is publishing one message for all matching overlapping subscriptions, not one for each.")
+        assert callback.messages[0][2] == 2
+        assert set(callback.messages[0][3]['subscription_identifier']) == set([42, 21])
+    else:
+        print("This server is publishing one message per each matching overlapping subscription.")
+        assert (callback.messages[0][2] == 2 and callback.messages[1][2] == 1) or \
+               (callback.messages[0][2] == 1 and callback.messages[1][2] == 2)
+
