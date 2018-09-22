@@ -78,7 +78,7 @@ PROPERTIES = [
     Property(9, 'b', 'correlation_data', ['PUBLISH']),
     Property(11, 'vbi', 'subscription_identifier', ['PUBLISH', 'SUBSCRIBE']),
     Property(17, '!L', 'session_expiry_interval', ['CONNECT', ]),
-    Property(18, 'u8', 'client_id', ['CONNACK', ]),
+    Property(18, 'u8', 'assigned_client_identifier', ['CONNACK', ]),
     Property(19, '!H', 'server_keep_alive', ['CONNACK']),
     Property(21, 'u8', 'auth_method', ['CONNECT', 'CONNACK', 'AUTH']),
     Property(23, '!B', 'request_problem_info', ['CONNECT']),

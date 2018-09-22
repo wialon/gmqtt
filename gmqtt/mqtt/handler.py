@@ -104,7 +104,7 @@ class MqttPackageHandler(EventCallback):
         self._error = None
         self._connection = None
 
-        self._id_generator = IdGenerator()
+        self._id_generator = IdGenerator(max=kwargs.get('receive_maximum', 65535))
 
         if self.protocol_version == MQTTv50:
             self._optimistic_acknowledgement = kwargs.get('optimistic_acknowledgement', True)

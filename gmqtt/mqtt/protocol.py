@@ -90,6 +90,10 @@ class MQTTProtocol(BaseMQTTProtocol):
         pkg = package.SubscribePacket.build_package(topic, qos, self, **kwargs)
         self.write_data(pkg)
 
+    def send_unsubscribe_packet(self, topic, **kwargs):
+        pkg = package.UnsubscribePacket.build_package(topic, self, **kwargs)
+        self.write_data(pkg)
+
     def send_simple_command_packet(self, cmd):
         pkg = package.SimpleCommandPacket.build_package(cmd)
         self.write_data(pkg)
