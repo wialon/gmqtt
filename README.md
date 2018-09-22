@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.com/Lenka42/gmqtt.svg?branch=master)](https://travis-ci.com/Lenka42/gmqtt) [![codecov](https://codecov.io/gh/Lenka42/gmqtt/branch/master/graph/badge.svg)](https://codecov.io/gh/Lenka42/gmqtt)
+[![Build Status](https://travis-ci.com/wialon/gmqtt.svg?branch=master)](https://travis-ci.com/wialon/gmqtt) [![codecov](https://codecov.io/gh/wialon/gmqtt/branch/master/graph/badge.svg)](https://codecov.io/gh/wialon/gmqtt)
 
 ### Python MQTT client implementation.
 
