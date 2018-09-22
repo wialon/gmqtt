@@ -6,3 +6,5 @@ install:
 # command to run tests
 script:
   - pytest --cov=gmqtt
+after_success:
+  - codecov
