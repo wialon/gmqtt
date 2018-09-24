@@ -10,7 +10,6 @@ class Callbacks:
 
     def __init__(self):
         self.messages = []
-        self.messagedicts = []
         self.publisheds = []
         self.subscribeds = []
         self.connack = None
@@ -33,8 +32,6 @@ class Callbacks:
         logging.info('[RECV MSG {}] TOPIC: {} PAYLOAD: {} QOS: {} PROPERTIES: {}'
                      .format(client._client_id, topic, payload, qos, properties))
         self.messages.append((topic, payload, qos, properties))
-        self.messagedicts.append({"topicname": topic, "payload": payload,
-                                  "qos": qos, "properties": properties})
 
     def on_subscribe(self, client, mid, qos):
         logging.info('[SUBSCRIBED {}] QOS: {}'.format(client._client_id, qos))
