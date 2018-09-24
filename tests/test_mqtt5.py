@@ -8,7 +8,7 @@ from tests.utils import Callbacks, cleanup, clean_retained
 
 host = 'mqtt.flespi.io'
 port = 1883
-username = os.getenv('USERNAME', 'fake_token')
+username = os.getenv('USERNAME', 'SZclN7axOOoE68GKjHjqLUA5et1ij1q1Qqarl8OZM0sGZWe8unn36NYa4OgdFu2l')
 
 TOPICS = ("TopicA", "TopicA/B", "TopicA/C", "TopicA/D", "/TopicA")
 WILDTOPICS = ("TopicA/+", "+/C", "#", "/#", "/+", "+/+", "TopicA/#")
@@ -204,3 +204,38 @@ async def test_overlapping_subscriptions(init_clients):
         assert (callback.messages[0][2] == 2 and callback.messages[1][2] == 1) or \
                (callback.messages[0][2] == 1 and callback.messages[1][2] == 2)
 
+
+@pytest.mark.asyncio
+async def test_redelivery_on_reconnect(init_clients):
+    # redelivery on reconnect. When a QoS 1 or 2 exchange has not been completed, the server should retry the
+    # appropriate MQTT packets
+    messages = []
+
+    def on_message(client, topic, payload, qos, properties):
+        print('MSG', (topic, payload, qos, properties))
+        messages.append((topic, payload, qos, properties))
+        return 131
+
+    aclient, callback, bclient, callback2 = init_clients
+
+    disconnect_client = gmqtt.Client('myclientid3', optimistic_acknowledgement=False,
+                                     clean_session=False, session_expiry_interval=99999)
+    disconnect_client.on_message = on_message
+    disconnect_client.set_auth_credentials(username)
+
+    await disconnect_client.connect(host=host, port=port)
+    disconnect_client.subscribe(WILDTOPICS[6], 2)
+
+    await asyncio.sleep(1)
+    await aclient.connect(host, port)
+    await asyncio.sleep(1)
+
+    aclient.publish(TOPICS[1], b"", 1, retain=False)
+    aclient.publish(TOPICS[3], b"", 2, retain=False)
+    await asyncio.sleep(1)
+    messages = []
+    await disconnect_client.reconnect()
+
+    await asyncio.sleep(2)
+    assert len(messages) == 2
+    await disconnect_client.disconnect()
