@@ -8,7 +8,7 @@ from tests.utils import Callbacks, cleanup, clean_retained
 
 host = 'mqtt.flespi.io'
 port = 1883
-username = os.getenv('USERNAME', 'SZclN7axOOoE68GKjHjqLUA5et1ij1q1Qqarl8OZM0sGZWe8unn36NYa4OgdFu2l')
+username = os.getenv('USERNAME', 'fake_token')
 
 TOPICS = ("TopicA", "TopicA/B", "TopicA/C", "TopicA/D", "/TopicA")
 WILDTOPICS = ("TopicA/+", "+/C", "#", "/#", "/+", "+/+", "TopicA/#")
@@ -161,13 +161,11 @@ async def test_unsubscribe(init_clients):
     bclient.subscribe(TOPICS[2])
     bclient.subscribe(TOPICS[3])
     await asyncio.sleep(1)
-    print(callback2.messages)
 
     aclient.publish(TOPICS[1], b"topic 0 - subscribed", 1, retain=False)
     aclient.publish(TOPICS[2], b"topic 1", 1, retain=False)
     aclient.publish(TOPICS[3], b"topic 2", 1, retain=False)
     await asyncio.sleep(1)
-    print(callback2.messages)
     assert len(callback2.messages) == 3
     callback2.clear()
     # Unsubscribe from one topic
@@ -177,7 +175,7 @@ async def test_unsubscribe(init_clients):
     aclient.publish(TOPICS[1], b"topic 0 - unsubscribed", 1, retain=False)
     aclient.publish(TOPICS[2], b"topic 1", 1, retain=False)
     aclient.publish(TOPICS[3], b"topic 2", 1, retain=False)
-    await asyncio.sleep(1)
+    await asyncio.sleep(2)
 
     assert len(callback2.messages) == 2
 
@@ -191,16 +189,13 @@ async def test_overlapping_subscriptions(init_clients):
     aclient.subscribe(TOPICS[3], qos=2, subscription_identifier=21)
     aclient.subscribe(WILDTOPICS[6], qos=1, subscription_identifier=42)
     await asyncio.sleep(1)
-    print(TOPICS[3], WILDTOPICS[6])
     bclient.publish(TOPICS[3], b"overlapping topic filters", 2)
     await asyncio.sleep(1)
     assert len(callback.messages) in [1, 2]
     if len(callback.messages) == 1:
-        print("This server is publishing one message for all matching overlapping subscriptions, not one for each.")
         assert callback.messages[0][2] == 2
         assert set(callback.messages[0][3]['subscription_identifier']) == set([42, 21])
     else:
-        print("This server is publishing one message per each matching overlapping subscription.")
         assert (callback.messages[0][2] == 2 and callback.messages[1][2] == 1) or \
                (callback.messages[0][2] == 1 and callback.messages[1][2] == 2)
 
@@ -239,3 +234,30 @@ async def test_redelivery_on_reconnect(init_clients):
     await asyncio.sleep(2)
     assert len(messages) == 2
     await disconnect_client.disconnect()
+
+
+async def test_request_response(init_clients):
+    aclient, callback, bclient, callback2 = init_clients
+
+    await aclient.connect(host=host, port=port)
+    await bclient.connect(host=host, port=port)
+
+    aclient.subscribe(WILDTOPICS[0], 2)
+
+    bclient.subscribe(WILDTOPICS[0], 2)
+
+    await asyncio.sleep(1)
+
+    # client a is the requester
+    aclient.publish(TOPICS[1], b"request", 1, response_topic=TOPICS[2], correlation_data=b'334')
+
+    # client b is the responder
+    assert len(callback2.messages) == 1
+
+    assert callback2.messages[0][5]['response_topic'] == TOPICS[2]
+    assert callback2.messages[0][5]['correlation_data'] == b"334"
+
+    bclient.publish(callback2.messages[0][5]['response_topic'], b"response", 1,
+                    correlation_data=callback2.messages[0][5]['correlation_data'])
+
+    assert len(callback.messages) == 1
