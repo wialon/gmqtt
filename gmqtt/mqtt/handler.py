@@ -50,6 +50,7 @@ class EventCallback(object):
         self._on_disconnected_callback = _empty_callback
         self._on_message_callback = _empty_callback
         self._on_subscribe_callback = _empty_callback
+        self._on_unsubscribe_callback = _empty_callback
 
         self._reconnect = True
 
@@ -94,6 +95,16 @@ class EventCallback(object):
         if not callable(cb):
             raise ValueError
         self._on_disconnected_callback = cb
+
+    @property
+    def on_unsubscribe(self):
+        return self._on_unsubscribe_callback
+
+    @on_unsubscribe.setter
+    def on_unsubscribe(self, cb):
+        if not callable(cb):
+            raise ValueError
+        self._on_unsubscribe_callback = cb
 
 
 class MqttPackageHandler(EventCallback):
@@ -293,6 +304,17 @@ class MqttPackageHandler(EventCallback):
         logger.info('[SUBACK] %s %s', mid, granted_qos)
         self.on_subscribe(self, mid, granted_qos)
 
+        self._id_generator.free_id(mid)
+
+    def _handle_unsuback_packet(self, cmd, raw_packet):
+        pack_format = "!H" + str(len(raw_packet) - 2) + 's'
+        (mid, packet) = struct.unpack(pack_format, raw_packet)
+        pack_format = "!" + "B" * len(packet)
+        granted_qos = struct.unpack(pack_format, packet)
+
+        logger.info('[UNSUBACK] %s %s', mid, granted_qos)
+
+        self.on_unsubscribe(self, mid, granted_qos)
         self._id_generator.free_id(mid)
 
     def _handle_pingreq_packet(self, cmd, packet):
