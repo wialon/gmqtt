@@ -111,7 +111,7 @@ class LoginPackageFactor(PackageFactory):
 
 class UnsubscribePacket(PackageFactory):
     @classmethod
-    def build_package(cls, topic, protocol, **kwargs) -> bytes:
+    def build_package(cls, topic, protocol, **kwargs) -> Tuple[int, bytes]:
         remaining_length = 2
         if not isinstance(topic, (list, tuple)):
             topics = [topic]
@@ -136,12 +136,12 @@ class UnsubscribePacket(PackageFactory):
 
         logger.info('[SEND UNSUB] %s', topics)
 
-        return packet
+        return local_mid, packet
 
 
 class SubscribePacket(PackageFactory):
     @classmethod
-    def build_package(cls, topic, qos, protocol, **kwargs) -> bytes:
+    def build_package(cls, topic, qos, protocol, **kwargs) -> Tuple[int, bytes]:
         remaining_length = 2
         if not isinstance(topic, (list, tuple)):
             topics = [topic]
@@ -167,7 +167,7 @@ class SubscribePacket(PackageFactory):
 
         logger.info('[SEND SUB] %s', topics)
 
-        return packet
+        return local_mid, packet
 
 
 class SimpleCommandPacket(PackageFactory):
