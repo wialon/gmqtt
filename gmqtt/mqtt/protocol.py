@@ -87,12 +87,14 @@ class MQTTProtocol(BaseMQTTProtocol):
         self.write_data(pkg)
 
     def send_subscribe_packet(self, topic, qos, **kwargs):
-        pkg = package.SubscribePacket.build_package(topic, qos, self, **kwargs)
+        mid, pkg = package.SubscribePacket.build_package(topic, qos, self, **kwargs)
         self.write_data(pkg)
+        return mid
 
     def send_unsubscribe_packet(self, topic, **kwargs):
-        pkg = package.UnsubscribePacket.build_package(topic, self, **kwargs)
+        mid, pkg = package.UnsubscribePacket.build_package(topic, self, **kwargs)
         self.write_data(pkg)
+        return mid
 
     def send_simple_command_packet(self, cmd):
         pkg = package.SimpleCommandPacket.build_package(cmd)

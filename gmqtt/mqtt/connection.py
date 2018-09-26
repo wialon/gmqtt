@@ -57,10 +57,10 @@ class MQTTConnection(object):
         self._protocol.send_disconnect(reason_code=reason_code, **properties)
 
     def subscribe(self, topic, qos, **kwargs):
-        self._protocol.send_subscribe_packet(topic, qos, **kwargs)
+        return self._protocol.send_subscribe_packet(topic, qos, **kwargs)
 
     def unsubscribe(self, topic, **kwargs):
-        self._protocol.send_unsubscribe_packet(topic, **kwargs)
+        return self._protocol.send_unsubscribe_packet(topic, **kwargs)
 
     def send_simple_command(self, cmd):
         self._protocol.send_simple_command_packet(cmd)
