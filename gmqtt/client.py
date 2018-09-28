@@ -170,10 +170,10 @@ class Client(MqttPackageHandler):
             await self._connection.close()
 
     def subscribe(self, topic, qos=0, **kwargs):
-        self._connection.subscribe(topic, qos, **kwargs)
+        return self._connection.subscribe(topic, qos, **kwargs)
 
     def unsubscribe(self, topic, **kwargs):
-        self._connection.unsubscribe(topic, **kwargs)
+        return self._connection.unsubscribe(topic, **kwargs)
 
     def publish(self, message_or_topic, payload=None, qos=0, retain=False, **kwargs):
         loop = asyncio.get_event_loop()
