@@ -169,8 +169,9 @@ class Client(MqttPackageHandler):
             self._connection.send_disconnect(reason_code=reason_code, **properties)
             await self._connection.close()
 
-    def subscribe(self, topic, qos=0, **kwargs):
-        return self._connection.subscribe(topic, qos, **kwargs)
+    def subscribe(self, topic, qos=0, no_local=False, retain_as_published=False, retain_handling_options=0, **kwargs):
+        return self._connection.subscribe(topic, qos, no_local=no_local, retain_as_published=retain_as_published,
+                                          retain_handling_options=retain_handling_options, **kwargs)
 
     def unsubscribe(self, topic, **kwargs):
         return self._connection.unsubscribe(topic, **kwargs)

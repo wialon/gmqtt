@@ -141,7 +141,8 @@ class UnsubscribePacket(PackageFactory):
 
 class SubscribePacket(PackageFactory):
     @classmethod
-    def build_package(cls, topic, qos, protocol, **kwargs) -> Tuple[int, bytes]:
+    def build_package(cls, topic, qos, protocol, no_local=0, retain_as_published=0,
+                      retain_handling_options=0, **kwargs) -> Tuple[int, bytes]:
         remaining_length = 2
         if not isinstance(topic, (list, tuple)):
             topics = [topic]
@@ -163,7 +164,8 @@ class SubscribePacket(PackageFactory):
         packet.extend(properties)
         for t in topics:
             cls._pack_str16(packet, t)
-            packet.append(qos)
+            subscribe_options = retain_handling_options << 4 | retain_as_published << 3 | no_local << 2 | qos
+            packet.append(subscribe_options)
 
         logger.info('[SEND SUB] %s', topics)
 
