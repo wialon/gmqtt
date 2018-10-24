@@ -261,3 +261,69 @@ async def test_request_response(init_clients):
                     correlation_data=callback2.messages[0][5]['correlation_data'])
 
     assert len(callback.messages) == 1
+
+
+async def test_subscribe_no_local(init_clients):
+    aclient, callback, bclient, callback2 = init_clients
+
+    await aclient.connect(host=host, port=port)
+    await bclient.connect(host=host, port=port)
+
+    aclient.subscribe(WILDTOPICS[0], 2, no_local=True)
+
+    bclient.subscribe(WILDTOPICS[0], 2)
+
+    await asyncio.sleep(1)
+
+    aclient.publish(TOPICS[1], b"aclient msg", 1)
+
+    bclient.publish(TOPICS[1], b"bclient msg", 1)
+
+    assert len(callback.messages) == 1
+    assert len(callback2.messages) == 2
+
+
+async def test_subscribe_retain_01_handling_flag(init_clients):
+    aclient, callback, bclient, callback2 = init_clients
+
+    await aclient.connect(host=host, port=port)
+    await bclient.connect(host=host, port=port)
+
+    aclient.publish(TOPICS[1], b"ret qos 1", 1, retain=True)
+
+    await asyncio.sleep(1)
+
+    bclient.subscribe(WILDTOPICS[0], qos=2, retain_handling_options=0)
+
+    await asyncio.sleep(1)
+
+    assert len(callback2.messages) == 1
+
+    bclient.subscribe(WILDTOPICS[0], qos=2, retain_handling_options=0)
+
+    await asyncio.sleep(1)
+
+    assert len(callback2.messages) == 2
+
+    bclient.subscribe(WILDTOPICS[0], qos=2, retain_handling_options=1)
+
+    await asyncio.sleep(1)
+
+    assert len(callback2.messages) == 2
+
+
+async def test_subscribe_retain_2_handling_flag(init_clients):
+    aclient, callback, bclient, callback2 = init_clients
+
+    await aclient.connect(host=host, port=port)
+    await bclient.connect(host=host, port=port)
+
+    aclient.publish(TOPICS[1], b"ret qos 1", 1, retain=True)
+
+    await asyncio.sleep(1)
+
+    bclient.subscribe(WILDTOPICS[0], qos=2, retain_handling_options=2)
+
+    await asyncio.sleep(1)
+
+    assert len(callback2.messages) == 0
