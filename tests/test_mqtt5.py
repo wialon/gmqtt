@@ -235,7 +235,7 @@ async def test_redelivery_on_reconnect(init_clients):
     assert len(messages) == 2
     await disconnect_client.disconnect()
 
-
+@pytest.mark.asyncio
 async def test_request_response(init_clients):
     aclient, callback, bclient, callback2 = init_clients
 
@@ -247,22 +247,24 @@ async def test_request_response(init_clients):
     bclient.subscribe(WILDTOPICS[0], 2)
 
     await asyncio.sleep(1)
-
     # client a is the requester
     aclient.publish(TOPICS[1], b"request", 1, response_topic=TOPICS[2], correlation_data=b'334')
+
+    await asyncio.sleep(1)
 
     # client b is the responder
     assert len(callback2.messages) == 1
 
-    assert callback2.messages[0][5]['response_topic'] == TOPICS[2]
-    assert callback2.messages[0][5]['correlation_data'] == b"334"
+    assert callback2.messages[0][3]['response_topic'] == [TOPICS[2],]
+    assert callback2.messages[0][3]['correlation_data'] == [b"334",]
 
-    bclient.publish(callback2.messages[0][5]['response_topic'], b"response", 1,
-                    correlation_data=callback2.messages[0][5]['correlation_data'])
+    bclient.publish(callback2.messages[0][3]['response_topic'][0], b"response", 1,
+                    correlation_data=callback2.messages[0][3]['correlation_data'][0])
 
-    assert len(callback.messages) == 1
+    await asyncio.sleep(1)
+    assert len(callback.messages) == 2
 
-
+@pytest.mark.asyncio
 async def test_subscribe_no_local(init_clients):
     aclient, callback, bclient, callback2 = init_clients
 
@@ -279,10 +281,12 @@ async def test_subscribe_no_local(init_clients):
 
     bclient.publish(TOPICS[1], b"bclient msg", 1)
 
+    await asyncio.sleep(1)
+
     assert len(callback.messages) == 1
     assert len(callback2.messages) == 2
 
-
+@pytest.mark.asyncio
 async def test_subscribe_retain_01_handling_flag(init_clients):
     aclient, callback, bclient, callback2 = init_clients
 
@@ -311,7 +315,7 @@ async def test_subscribe_retain_01_handling_flag(init_clients):
 
     assert len(callback2.messages) == 2
 
-
+@pytest.mark.asyncio
 async def test_subscribe_retain_2_handling_flag(init_clients):
     aclient, callback, bclient, callback2 = init_clients
 
