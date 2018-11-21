@@ -46,13 +46,12 @@ class Message:
 
 
 class Client(MqttPackageHandler):
-    def __init__(self, client_id, clean_session=True, transport='tcp', optimistic_acknowledgement=True,
+    def __init__(self, client_id, clean_session=True, optimistic_acknowledgement=True,
                  will_message=None, **kwargs):
         super(Client, self).__init__(optimistic_acknowledgement=optimistic_acknowledgement)
         self._client_id = client_id or uuid.uuid4().hex
 
         self._clean_session = clean_session
-        self._transport = transport
 
         self._connection = None
         self._keepalive = 60
@@ -62,6 +61,7 @@ class Client(MqttPackageHandler):
 
         self._host = None
         self._port = None
+        self._ssl = None
 
         self._connect_properties = kwargs
         self._connack_properties = {}
@@ -118,16 +118,17 @@ class Client(MqttPackageHandler):
         if isinstance(self._password, str):
             self._password = password.encode()
 
-    async def connect(self, host, port=1883, keepalive=60, version=MQTTv50):
+    async def connect(self, host, port=1883, ssl=False, keepalive=60, version=MQTTv50):
         # Init connection
         self._host = host
         self._port = port
+        self._ssl = ssl
         self._keepalive = keepalive
 
         MQTTProtocol.proto_ver = version
 
         self._connection = await self._create_connection(
-            host, port=self._port, clean_session=self._clean_session, keepalive=keepalive)
+            host, port=self._port, ssl=self._ssl, clean_session=self._clean_session, keepalive=keepalive)
 
         await self._connection.auth(self._client_id, self._username, self._password, will_message=self._will_message,
                                     **self._connect_properties)
@@ -140,9 +141,9 @@ class Client(MqttPackageHandler):
         if self._error:
             raise self._error
 
-    async def _create_connection(self, host, port, clean_session, keepalive):
+    async def _create_connection(self, host, port, ssl, clean_session, keepalive):
         self._reconnect = True
-        connection = await MQTTConnection.create_connection(host, port, clean_session, keepalive)
+        connection = await MQTTConnection.create_connection(host, port, ssl, clean_session, keepalive)
         connection.set_handler(self)
         return connection
 
@@ -153,7 +154,8 @@ class Client(MqttPackageHandler):
             return
         await asyncio.sleep(RECONNECTION_SLEEP)
         try:
-            self._connection = await self._create_connection(self._host, self._port, clean_session=False, keepalive=self._keepalive)
+            self._connection = await self._create_connection(self._host, self._port, ssl=self._ssl,
+                                                             clean_session=False, keepalive=self._keepalive)
         except OSError as exc:
             self.failed_connections += 1
             logger.warning("[CAN'T RECONNECT] %s", self.failed_connections)

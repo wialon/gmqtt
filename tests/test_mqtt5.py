@@ -194,7 +194,7 @@ async def test_overlapping_subscriptions(init_clients):
     assert len(callback.messages) in [1, 2]
     if len(callback.messages) == 1:
         assert callback.messages[0][2] == 2
-        assert set(callback.messages[0][3]['subscription_identifier']) == set([42, 21])
+        assert set(callback.messages[0][3]['subscription_identifier']) == {42, 21}
     else:
         assert (callback.messages[0][2] == 2 and callback.messages[1][2] == 1) or \
                (callback.messages[0][2] == 1 and callback.messages[1][2] == 2)
@@ -235,6 +235,7 @@ async def test_redelivery_on_reconnect(init_clients):
     assert len(messages) == 2
     await disconnect_client.disconnect()
 
+
 @pytest.mark.asyncio
 async def test_request_response(init_clients):
     aclient, callback, bclient, callback2 = init_clients
@@ -255,14 +256,15 @@ async def test_request_response(init_clients):
     # client b is the responder
     assert len(callback2.messages) == 1
 
-    assert callback2.messages[0][3]['response_topic'] == [TOPICS[2],]
-    assert callback2.messages[0][3]['correlation_data'] == [b"334",]
+    assert callback2.messages[0][3]['response_topic'] == [TOPICS[2], ]
+    assert callback2.messages[0][3]['correlation_data'] == [b"334", ]
 
     bclient.publish(callback2.messages[0][3]['response_topic'][0], b"response", 1,
                     correlation_data=callback2.messages[0][3]['correlation_data'][0])
 
     await asyncio.sleep(1)
     assert len(callback.messages) == 2
+
 
 @pytest.mark.asyncio
 async def test_subscribe_no_local(init_clients):
@@ -285,6 +287,7 @@ async def test_subscribe_no_local(init_clients):
 
     assert len(callback.messages) == 1
     assert len(callback2.messages) == 2
+
 
 @pytest.mark.asyncio
 async def test_subscribe_retain_01_handling_flag(init_clients):
@@ -315,6 +318,7 @@ async def test_subscribe_retain_01_handling_flag(init_clients):
 
     assert len(callback2.messages) == 2
 
+
 @pytest.mark.asyncio
 async def test_subscribe_retain_2_handling_flag(init_clients):
     aclient, callback, bclient, callback2 = init_clients
@@ -331,3 +335,20 @@ async def test_subscribe_retain_2_handling_flag(init_clients):
     await asyncio.sleep(1)
 
     assert len(callback2.messages) == 0
+
+
+@pytest.mark.asyncio
+async def test_basic_ssl(init_clients):
+    aclient, callback, bclient, callback2 = init_clients
+    ssl_port = 8883
+
+    await aclient.connect(host=host, port=ssl_port, ssl=True, version=4)
+    await bclient.connect(host=host, port=ssl_port, ssl=True, version=5)
+    bclient.subscribe(TOPICS[0])
+    await asyncio.sleep(1)
+
+    aclient.publish(TOPICS[0], b"qos 0")
+    aclient.publish(TOPICS[0], b"qos 1", 1)
+    aclient.publish(TOPICS[0], b"qos 2", 2)
+    await asyncio.sleep(1)
+    assert len(callback2.messages) == 3
