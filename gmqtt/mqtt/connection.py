@@ -21,9 +21,9 @@ class MQTTConnection(object):
         self._keep_connection_callback = asyncio.get_event_loop().call_later(self._keepalive, self._keep_connection)
 
     @classmethod
-    async def create_connection(cls, host, port, clean_session, keepalive, loop=None):
+    async def create_connection(cls, host, port, ssl, clean_session, keepalive, loop=None):
         loop = loop or asyncio.get_event_loop()
-        transport, protocol = await loop.create_connection(MQTTProtocol, host, port)
+        transport, protocol = await loop.create_connection(MQTTProtocol, host, port, ssl=ssl)
         return MQTTConnection(transport, protocol, clean_session, keepalive)
 
     def _keep_connection(self):
