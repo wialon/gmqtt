@@ -106,7 +106,7 @@ def on_message(client, topic, payload, qos, properties):
 
 async def main(broker_host, token):
     client = MQTTClient('asdfghjk')
-    client.on_message = client_id
+    client.on_message = on_message
     client.on_connect = on_connect
     client.set_auth_credentials(token, None)
     await client.connect(broker_host, 1883, keepalive=60)
