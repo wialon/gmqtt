@@ -1,5 +1,4 @@
 import asyncio
-
 import os
 import pytest
 
@@ -58,7 +57,7 @@ async def test_retained_message(init_clients):
     await aclient.connect(host=host, port=port)
     aclient.publish(TOPICS[1], b"ret qos 0", 0, retain=True, user_property=("a", "2"))
     aclient.publish(TOPICS[2], b"ret qos 1", 1, retain=True, user_property=("c", "3"))
-    aclient.publish(TOPICS[3], b"ret qos 2", 2, retain=True, user_property=("a", "2"))
+    aclient.publish(TOPICS[3], b"ret qos 2", 2, retain=True, user_property=(("a", "2"), ("c", "3")))
 
     await asyncio.sleep(1)
     await aclient.disconnect()

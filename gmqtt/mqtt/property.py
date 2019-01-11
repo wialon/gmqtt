@@ -38,25 +38,36 @@ class Property:
             value = value[0]
         return value, left_str
 
+    def _dump_user_property(self, data, packet):
+        packet.extend(struct.pack('!B', self.id))
+        data1, data2 = data
+        packet.extend(pack_utf8(data1))
+        packet.extend(pack_utf8(data2))
+
     def dumps(self, data):
         # packs property value into byte array
         packet = bytearray()
-        packet.extend(struct.pack('!B', self.id))
         if self.bytes_struct == 'u8':
+            packet.extend(struct.pack('!B', self.id))
             packet.extend(pack_utf8(data))
             return packet
         elif self.bytes_struct == 'u8x2':
-            data1, data2 = data
-            packet.extend(pack_utf8(data1))
-            packet.extend(pack_utf8(data2))
+            if isinstance(data[0], str):
+                self._dump_user_property(data, packet)
+            else:
+                for kv_pair in data:
+                    self._dump_user_property(kv_pair, packet)
             return packet
         elif self.bytes_struct == 'b':
+            packet.extend(struct.pack('!B', self.id))
             packet.extend(struct.pack('!H', len(data)))
             packet.extend(data)
             return packet
         elif self.bytes_struct == 'vbi':
+            packet.extend(struct.pack('!B', self.id))
             packet.extend(pack_variable_byte_integer(data))
             return packet
+        packet.extend(struct.pack('!B', self.id))
         packet.extend(struct.pack(self.bytes_struct, data))
         return packet
 
