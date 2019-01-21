@@ -251,6 +251,9 @@ class MqttPackageHandler(EventCallback):
             mid = None
 
         properties, packet = self._parse_properties(packet)
+        properties['dup'] = dup
+        properties['retain'] = retain
+
         if packet is None:
             logger.critical('[INVALID MESSAGE] skipping: {}'.format(raw_packet))
             return

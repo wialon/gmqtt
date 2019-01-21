@@ -59,15 +59,21 @@ async def test_retained_message(init_clients):
     aclient.publish(TOPICS[2], b"ret qos 1", 1, retain=True, user_property=("c", "3"))
     aclient.publish(TOPICS[3], b"ret qos 2", 2, retain=True, user_property=(("a", "2"), ("c", "3")))
 
-    await asyncio.sleep(1)
-    await aclient.disconnect()
-    await asyncio.sleep(1)
+    await asyncio.sleep(2)
 
     await bclient.connect(host=host, port=port)
     bclient.subscribe(WILDTOPICS[0], qos=2)
     await asyncio.sleep(1)
 
     assert len(callback2.messages) == 3
+    for msg in callback2.messages:
+        assert msg[3]['retain'] == True
+
+    aclient.publish(TOPICS[2], b"ret qos 1", 1, retain=True, user_property=("c", "3"))
+    await asyncio.sleep(1)
+
+    assert len(callback2.messages) == 4
+    assert callback2.messages[3][3]['retain'] == 0
 
     await clean_retained(host, port, username)
 
