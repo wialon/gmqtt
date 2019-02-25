@@ -321,11 +321,11 @@ class MqttPackageHandler(EventCallback):
         self._id_generator.free_id(mid)
 
     def _handle_pingreq_packet(self, cmd, packet):
-        logger.info('[PING REQUEST] %s %s', hex(cmd), packet)
+        logger.debug('[PING REQUEST] %s %s', hex(cmd), packet)
         pass
 
     def _handle_pingresp_packet(self, cmd, packet):
-        logger.info('[PONG REQUEST] %s %s', hex(cmd), packet)
+        logger.debug('[PONG REQUEST] %s %s', hex(cmd), packet)
 
     def _handle_puback_packet(self, cmd, packet):
         (mid, ) = struct.unpack("!H", packet[:2])

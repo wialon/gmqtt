@@ -4,7 +4,6 @@ import gmqtt
 
 from setuptools import setup, find_packages
 
-
 extra = {}
 if sys.version_info >= (3, 4):
     extra['use_2to3'] = False
@@ -18,7 +17,7 @@ CLASSIFIERS = [
     'Operating System :: OS Independent',
     'Programming Language :: Python',
     'Topic :: Software Development :: Libraries :: Python Modules'
-    ]
+]
 
 KEYWORDS = 'Gurtam MQTT client.'
 
@@ -34,5 +33,10 @@ setup(name='gmqtt',
       classifiers=CLASSIFIERS,
       keywords=KEYWORDS,
       zip_safe=True,
-      install_requires=[]
-)
+      install_requires=[],
+      tests_requires=[
+          'pytest==3.8.0',
+          'pytest-cov==2.6.0',
+          'pytest-asyncio==0.9.0',
+      ]
+      )
