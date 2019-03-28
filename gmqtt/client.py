@@ -28,12 +28,12 @@ class Message:
         self.properties = kwargs
 
         if isinstance(payload, (list, tuple, dict)):
-            payload = json.dumps(payload)
+            payload = json.dumps(payload, ensure_ascii=False)
 
         if isinstance(payload, (int, float)):
             self.payload = str(payload).encode('ascii')
         elif isinstance(payload, str):
-            self.payload = payload.encode()
+            self.payload = payload.encode('utf-8', errors='replace')
         elif payload is None:
             self.payload = b''
         else:
