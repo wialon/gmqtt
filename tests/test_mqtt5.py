@@ -242,6 +242,43 @@ async def test_redelivery_on_reconnect(init_clients):
 
 
 @pytest.mark.asyncio
+async def test_async_on_message(init_clients):
+    # redelivery on reconnect. When a QoS 1 or 2 exchange has not been completed, the server should retry the
+    # appropriate MQTT packets
+    messages = []
+
+    async def on_message(client, topic, payload, qos, properties):
+        print('MSG', (topic, payload, qos, properties))
+        await asyncio.sleep(0.5)
+        messages.append((topic, payload, qos, properties))
+        return 131
+
+    aclient, callback, bclient, callback2 = init_clients
+
+    disconnect_client = gmqtt.Client('myclientid3', optimistic_acknowledgement=False,
+                                     clean_session=False, session_expiry_interval=99999)
+    disconnect_client.on_message = on_message
+    disconnect_client.set_auth_credentials(username)
+
+    await disconnect_client.connect(host=host, port=port)
+    disconnect_client.subscribe(WILDTOPICS[6], 2)
+
+    await asyncio.sleep(1)
+    await aclient.connect(host, port)
+    await asyncio.sleep(1)
+
+    aclient.publish(TOPICS[1], b"", 1, retain=False)
+    aclient.publish(TOPICS[3], b"", 2, retain=False)
+    await asyncio.sleep(2)
+    messages = []
+    await disconnect_client.reconnect()
+
+    await asyncio.sleep(2)
+    assert len(messages) == 2
+    await disconnect_client.disconnect()
+
+
+@pytest.mark.asyncio
 async def test_request_response(init_clients):
     aclient, callback, bclient, callback2 = init_clients
 
