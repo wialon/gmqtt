@@ -88,8 +88,11 @@ class Client(MqttPackageHandler):
         if await self._persistent_storage.is_empty:
             logger.debug('[QoS query IS EMPTY]')
             await asyncio.sleep(self._retry_deliver_timeout)
+        elif self._connection.is_closing:
+            logger.debug('[Some msg need to resend] Transport is closing, sleeping')
+            await asyncio.sleep(self._retry_deliver_timeout)
         else:
-            logger.debug('[Some msg need to resend]')
+            logger.debug('[Some msg need to resend] processing message')
             msg = await self._persistent_storage.pop_message()
 
             if msg:
