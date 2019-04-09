@@ -2,7 +2,9 @@ import asyncio
 import logging
 import struct
 import time
+from asyncio import iscoroutinefunction
 from collections import defaultdict
+from functools import partial
 
 from .utils import unpack_variable_byte_integer, IdGenerator
 from .property import Property
@@ -271,11 +273,22 @@ class MqttPackageHandler(EventCallback):
             self._send_pubrec(mid)
             self.on_message(self, print_topic, packet, 2, properties)
         else:
-            reason_code = self.on_message(self, print_topic, packet, 2, properties)
-            if reason_code not in (c.value for c in PubRecReasonCode):
-                raise ValueError('Invalid PUBREC reason code {}'.format(reason_code))
-            self._send_pubrec(mid, reason_code=reason_code)
+            if iscoroutinefunction(self.on_message):
+                f = asyncio.ensure_future(self.on_message(self, print_topic, packet, 2, properties))
+                f.add_done_callback(partial(self.__handle_publish_callback, qos=2, mid=mid))
+            else:
+                reason_code = self.on_message(self, print_topic, packet, 2, properties)
+                if reason_code not in (c.value for c in PubRecReasonCode):
+                    raise ValueError('Invalid PUBREC reason code {}'.format(reason_code))
 
+    def __handle_publish_callback(self, f, qos=None, mid=None):
+        reason_code = f.result()
+        if reason_code not in (c.value for c in PubRecReasonCode):
+            raise ValueError('Invalid PUBREC reason code {}'.format(reason_code))
+        if qos == 2:
+            self._send_pubrec(mid, reason_code=reason_code)
+        else:
+            self._send_puback(mid, reason_code=reason_code)
         self._id_generator.free_id(mid)
 
     def _handle_qos_1_publish_packet(self, mid, packet, print_topic, properties):
@@ -283,10 +296,14 @@ class MqttPackageHandler(EventCallback):
             self._send_puback(mid)
             self.on_message(self, print_topic, packet, 1, properties)
         else:
-            reason_code = self.on_message(self, print_topic, packet, 1, properties)
-            if reason_code not in (c.value for c in PubAckReasonCode):
-                raise ValueError('Invalid PUBACK reason code {}'.format(reason_code))
-            self._send_puback(mid, reason_code=reason_code)
+            if iscoroutinefunction(self.on_message):
+                f = asyncio.ensure_future(self.on_message(self, print_topic, packet, 2, properties))
+                f.add_done_callback(partial(self.__handle_publish_callback, qos=1, mid=mid))
+            else:
+                reason_code = self.on_message(self, print_topic, packet, 1, properties)
+                if reason_code not in (c.value for c in PubAckReasonCode):
+                    raise ValueError('Invalid PUBACK reason code {}'.format(reason_code))
+                self._send_puback(mid, reason_code=reason_code)
 
         self._id_generator.free_id(mid)
 
