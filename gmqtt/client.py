@@ -145,13 +145,12 @@ class Client(MqttPackageHandler):
             raise self._error
 
     async def _create_connection(self, host, port, ssl, clean_session, keepalive):
-        self._reconnect = True
         connection = await MQTTConnection.create_connection(host, port, ssl, clean_session, keepalive)
         connection.set_handler(self)
         return connection
 
     async def reconnect(self):
-        await self.disconnect()
+        await self._disconnect()
         if self.failed_connections > FAILED_CONNECTIONS_STOP_RECONNECT:
             logger.error('[DISCONNECTED] max number of failed connection attempts achieved')
             return
@@ -170,6 +169,9 @@ class Client(MqttPackageHandler):
 
     async def disconnect(self, reason_code=0, **properties):
         self._reconnect = False
+        await self._disconnect(reason_code=reason_code, **properties)
+
+    async def _disconnect(self, reason_code=0, **properties):
         if self._connection:
             self._connection.send_disconnect(reason_code=reason_code, **properties)
             await self._connection.close()
@@ -204,3 +206,6 @@ class Client(MqttPackageHandler):
     def protocol_version(self):
         return self._connection._protocol.proto_ver \
             if self._connection is not None else MQTTv50
+
+    def stop_reconnect(self):
+        self._reconnect = False
