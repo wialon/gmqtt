@@ -162,7 +162,7 @@ class MqttPackageHandler(EventCallback):
 
     def _handle_disconnect_packet(self, cmd, packet):
         if self._reconnect:
-            future = asyncio.ensure_future(self.reconnect())
+            future = asyncio.ensure_future(self.reconnect(delay=True))
             future.add_done_callback(self._handle_exception_in_future)
         self.on_disconnect(self, packet)
 
@@ -196,12 +196,13 @@ class MqttPackageHandler(EventCallback):
             self.failed_connections += 1
             if result == 1 and self.protocol_version == MQTTv50:
                 MQTTProtocol.proto_ver = MQTTv311
-                future = asyncio.ensure_future(self.reconnect())
+                future = asyncio.ensure_future(self.reconnect(delay=True))
                 future.add_done_callback(self._handle_exception_in_future)
                 return
             else:
                 self._error = MQTTConnectError(result)
-                asyncio.ensure_future(self.reconnect())
+                if self._reconnect:
+                    asyncio.ensure_future(self.reconnect(delay=True))
                 return
         else:
             self.failed_connections = 0
@@ -261,7 +262,10 @@ class MqttPackageHandler(EventCallback):
             return
 
         if qos == 0:
-            self.on_message(self, print_topic, packet, qos, properties)
+            if iscoroutinefunction(self.on_message):
+                asyncio.ensure_future(self.on_message(self, print_topic, packet, qos, properties))
+            else:
+                self.on_message(self, print_topic, packet, qos, properties)
             self._id_generator.free_id(mid)
         elif qos == 1:
             self._handle_qos_1_publish_packet(mid, packet, print_topic, properties)
