@@ -100,3 +100,11 @@ class ConnAckReasonCode(enum.IntEnum):
     USE_ANOTHER_SERVER = 156
     SERVER_MOVED = 157
     CONNECTION_RATE_EXCEEDED = 159
+
+
+UNLIMITED_RECONNECTS = -1
+
+DEFAULT_CONFIG = {
+    'reconnect_delay': 6,
+    'reconnect_retries': UNLIMITED_RECONNECTS,
+}
