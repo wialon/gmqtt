@@ -4,12 +4,13 @@ import struct
 import time
 from asyncio import iscoroutinefunction
 from collections import defaultdict
+from copy import deepcopy
 from functools import partial
 
 from .utils import unpack_variable_byte_integer, IdGenerator
 from .property import Property
 from .protocol import MQTTProtocol
-from .constants import MQTTCommands, PubAckReasonCode, PubRecReasonCode
+from .constants import MQTTCommands, PubAckReasonCode, PubRecReasonCode, DEFAULT_CONFIG
 from .constants import MQTTv311, MQTTv50
 
 logger = logging.getLogger(__name__)
@@ -54,9 +55,29 @@ class EventCallback(object):
         self._on_subscribe_callback = _empty_callback
         self._on_unsubscribe_callback = _empty_callback
 
-        self._reconnect = True
+        self._config = deepcopy(DEFAULT_CONFIG)
 
         self.failed_connections = 0
+
+    def stop_reconnect(self):
+        self._config['reconnect_retries'] = 0
+
+    def set_config(self, config):
+        self._config.update(config)
+
+    @property
+    def _reconnect(self):
+        if self.reconnect_retries == -1:
+            return True
+        return bool(self.reconnect_retries)
+
+    @property
+    def reconnect_delay(self):
+        return self._config['reconnect_delay']
+
+    @property
+    def reconnect_retries(self):
+        return self._config['reconnect_retries']
 
     @property
     def on_subscribe(self):

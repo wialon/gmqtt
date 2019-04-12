@@ -146,5 +146,15 @@ client.publish('TEST/TIME', str(time.time()), qos=1, retain=True, message_expiry
 ##### Subscribe properties
 * `subscription_identifier` - `int` If the Client specified a Subscription Identifier for any of the overlapping subscriptions the Server MUST send those Subscription Identifiers in the message which is published as the result of the subscriptions.
 
+###Reconnects
+By default, connected MQTT client will always try to reconnect in case of lost connections. Number of reconnect attempts is unlimited.
+If you want to change this behaviour, do the following:
+```python
+client = MQTTClient("client-id")
+client.set_config({'reconnect_retries': 10, 'reconnect_delay': 60})
+```
+Code above will set number of reconnect attempts to 10 and delay between reconnect attempts to 1min (60s). By default `reconnect_delay=6` and  `reconnect_retries=-1` which stands for infinity.
+Note that manually calling `await client.disconnect()` will set `reconnect_retries` for 0, which will stop auto reconnect.
+
 ### Other examples
 Check [examples directory](examples) for more use cases.

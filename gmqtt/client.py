@@ -3,23 +3,15 @@ import json
 
 import logging
 import uuid
-from copy import deepcopy
 
 from .mqtt.protocol import MQTTProtocol
 from .mqtt.connection import MQTTConnection
 from .mqtt.handler import MqttPackageHandler
-from .mqtt.constants import MQTTv311, MQTTv50
-
+from .mqtt.constants import MQTTv50, UNLIMITED_RECONNECTS
 
 from .storage import HeapPersistentStorage
 
 logger = logging.getLogger(__name__)
-
-
-_defaults = {
-    'reconnect_delay': 6,
-    'reconnect_retries': 100,
-}
 
 
 class Message:
@@ -72,8 +64,6 @@ class Client(MqttPackageHandler):
 
         self._will_message = will_message
 
-        self._config = deepcopy(_defaults)
-
         # TODO: this constant may be moved to config
         self._retry_deliver_timeout = kwargs.pop('retry_deliver_timeout', 5)
         self._persistent_storage = kwargs.pop('persistent_storage', HeapPersistentStorage(self._retry_deliver_timeout))
@@ -81,10 +71,6 @@ class Client(MqttPackageHandler):
         self._topic_alias_maximum = kwargs.get('topic_alias_maximum', 0)
 
         asyncio.ensure_future(self._resend_qos_messages())
-
-    def set_config(self, config):
-        self._config.update(config)
-        self._reconnect = bool(self._config['reconnect_retries'])
 
     def _remove_message_from_query(self, mid):
 
@@ -160,9 +146,16 @@ class Client(MqttPackageHandler):
         connection.set_handler(self)
         return connection
 
+    def _allow_reconnect(self):
+        if self._config['reconnect_retries'] == UNLIMITED_RECONNECTS:
+            return True
+        if self.failed_connections <= self._config['reconnect_retries']:
+            return True
+        return False
+
     async def reconnect(self, delay=False):
         await self._disconnect()
-        if self.failed_connections > self._config['reconnect_retries']:
+        if not self._allow_reconnect():
             logger.error('[DISCONNECTED] max number of failed connection attempts achieved')
             return
         if delay:
@@ -171,8 +164,6 @@ class Client(MqttPackageHandler):
             self._connection = await self._create_connection(self._host, self._port, ssl=self._ssl,
                                                              clean_session=False, keepalive=self._keepalive)
         except OSError as exc:
-            if not self._reconnect:
-                raise
             self.failed_connections += 1
             logger.warning("[CAN'T RECONNECT] %s", self.failed_connections)
             asyncio.ensure_future(self.reconnect(delay=True))
@@ -181,7 +172,7 @@ class Client(MqttPackageHandler):
                                     will_message=self._will_message, **self._connect_properties)
 
     async def disconnect(self, reason_code=0, **properties):
-        self._reconnect = False
+        self.stop_reconnect()
         await self._disconnect(reason_code=reason_code, **properties)
 
     async def _disconnect(self, reason_code=0, **properties):
@@ -219,7 +210,3 @@ class Client(MqttPackageHandler):
     def protocol_version(self):
         return self._connection._protocol.proto_ver \
             if self._connection is not None else MQTTv50
-
-    def stop_reconnect(self):
-        self._reconnect = False
-        self._config['reconnect_retries'] = 0
