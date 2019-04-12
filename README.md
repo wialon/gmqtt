@@ -146,7 +146,7 @@ client.publish('TEST/TIME', str(time.time()), qos=1, retain=True, message_expiry
 ##### Subscribe properties
 * `subscription_identifier` - `int` If the Client specified a Subscription Identifier for any of the overlapping subscriptions the Server MUST send those Subscription Identifiers in the message which is published as the result of the subscriptions.
 
-###Reconnects
+### Reconnects
 By default, connected MQTT client will always try to reconnect in case of lost connections. Number of reconnect attempts is unlimited.
 If you want to change this behaviour, do the following:
 ```python
