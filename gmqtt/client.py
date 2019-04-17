@@ -142,6 +142,8 @@ class Client(MqttPackageHandler):
             raise self._error
 
     async def _create_connection(self, host, port, ssl, clean_session, keepalive):
+        # important for reconnects, make sure u know what u are doing if wanna change :(
+        self._restore_config()
         connection = await MQTTConnection.create_connection(host, port, ssl, clean_session, keepalive)
         connection.set_handler(self)
         return connection
@@ -154,6 +156,8 @@ class Client(MqttPackageHandler):
         return False
 
     async def reconnect(self, delay=False):
+        # stopping auto-reconnects during reconnect procedure is important, better do not touch :(
+        self._temporatily_stop_reconnect()
         await self._disconnect()
         if not self._allow_reconnect():
             logger.error('[DISCONNECTED] max number of failed connection attempts achieved')

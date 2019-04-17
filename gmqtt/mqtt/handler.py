@@ -56,8 +56,17 @@ class EventCallback(object):
         self._on_unsubscribe_callback = _empty_callback
 
         self._config = deepcopy(DEFAULT_CONFIG)
+        self._reconnects_config_cache = None
 
         self.failed_connections = 0
+
+    def _temporatily_stop_reconnect(self):
+        self._reconnects_config_cache = self._config['reconnect_retries']
+        self.stop_reconnect()
+
+    def _restore_config(self):
+        if self._reconnects_config_cache is not None:
+            self._config['reconnect_retries'] = self._reconnects_config_cache
 
     def stop_reconnect(self):
         self._config['reconnect_retries'] = 0
