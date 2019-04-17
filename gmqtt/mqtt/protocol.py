@@ -156,6 +156,9 @@ class MQTTProtocol(BaseMQTTProtocol):
         while self._connected.is_set():
             try:
                 byte = await self.read(1)
+                if byte is None:
+                    logger.debug("[RECV EMPTY] Connection will be reset automatically.")
+                    break
                 command, = struct.unpack("!B", byte)
                 packet = await self._read_packet()
                 self._connection.put_package((command, packet))
