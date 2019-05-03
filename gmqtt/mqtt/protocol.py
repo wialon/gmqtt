@@ -123,45 +123,64 @@ class MQTTProtocol(BaseMQTTProtocol):
                                                          proto_ver=self.proto_ver)
         self.write_data(pkg)
 
-    async def _read_packet(self):
-        remaining_count = []
-        remaining_length = 0
-        remaining_mult = 1
+    async def _read_packet(self, data):
+        parsed_size = 0
+        data_size = len(data)
 
         while True:
-            byte, = struct.unpack("!B", await self.read(1))
-            remaining_count.append(byte)
-
-            if len(remaining_count) > 4:
-                logger.warning('[MQTT ERR PROTO] RECV MORE THAN 4 bytes for remaining length.')
-                return None
-
-            remaining_length += (byte & 127) * remaining_mult
-            remaining_mult *= 128
-
-            if byte & 128 == 0:
+            # try to extract packet data, minimum expected packet size is 2
+            if data_size < 2:
                 break
 
-        packet = b''
-        while remaining_length > 0:
-            chunk = await self.read(remaining_length)
-            remaining_length -= len(chunk)
-            packet += chunk
+            # extract payload size
+            header_size = 1
+            mult = 1
+            payload_size = 0
 
-        return packet
+            while True:
+                payload_byte = data[parsed_size + header_size]
+                payload_size += (payload_byte & 0x7F) * mult
+                if (mult > 128 * 128 * 128):
+                    return -1
+                mult *= 128
+                header_size += 1
+                if header_size + payload_size > data_size:
+                    # not enaugh data
+                    break
+                if payload_byte & 128 == 0:
+                    break
+
+            # check size once more
+            if header_size + payload_size > data_size:
+                # not enaugh data
+                break
+
+            # determine packet type
+            command = data[parsed_size]
+            start = parsed_size + header_size
+            end = start + payload_size
+            packet = data[start:end]
+
+            data_size -= header_size + payload_size
+            parsed_size += header_size + payload_size
+
+            self._connection.put_package((command, packet))
+
+        return parsed_size
 
     async def _read_loop(self):
         await self._connected.wait()
 
+        buf = b''
+        max_buff_size = 64 * 1024
         while self._connected.is_set():
             try:
-                byte = await self.read(1)
-                if byte is None:
+                buf += await self.read(max_buff_size)
+                parsed_size = await self._read_packet(buf)
+                if parsed_size == -1:
                     logger.debug("[RECV EMPTY] Connection will be reset automatically.")
                     break
-                command, = struct.unpack("!B", byte)
-                packet = await self._read_packet()
-                self._connection.put_package((command, packet))
+                buf = buf[parsed_size:]
             except ConnectionResetError as exc:
                 # This connection will be closed, because we received the empty data.
                 # So we can safely break the while
