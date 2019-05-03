@@ -141,7 +141,6 @@ class MQTTProtocol(BaseMQTTProtocol):
                 payload_byte = data[parsed_size + header_size]
                 payload_size += (payload_byte & 0x7F) * mult
                 if (mult > 128 * 128 * 128):
-                    logger.info(f"malformed packet remaining length, data-size={data_size}, mqtt protocol violation")
                     return -1
                 mult *= 128
                 header_size += 1
