@@ -176,14 +176,11 @@ class MQTTProtocol(BaseMQTTProtocol):
         while self._connected.is_set():
             try:
                 buf += await self.read(max_buff_size)
-                if buf:
-                    parsed_size = self._read_packet(buf)
-                    if parsed_size == -1:
-                        logger.debug("[RECV EMPTY] Connection will be reset automatically.")
-                        break
-                    buf = buf[parsed_size:]
-                else:
-                    await asyncio.sleep(0)
+                parsed_size = self._read_packet(buf)
+                if parsed_size == -1 or self._transport.is_closing():
+                    logger.debug("[RECV EMPTY] Connection will be reset automatically.")
+                    break
+                buf = buf[parsed_size:]
             except ConnectionResetError as exc:
                 # This connection will be closed, because we received the empty data.
                 # So we can safely break the while
