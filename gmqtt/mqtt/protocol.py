@@ -123,7 +123,7 @@ class MQTTProtocol(BaseMQTTProtocol):
                                                          proto_ver=self.proto_ver)
         self.write_data(pkg)
 
-    async def _read_packet(self, data):
+    def _read_packet(self, data):
         parsed_size = 0
         data_size = len(data)
 
