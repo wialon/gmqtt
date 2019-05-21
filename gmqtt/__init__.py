@@ -12,7 +12,7 @@ __credits__ = [
     "Mikhail Turchunovich",
     "Elena Nikolaichik"
 ]
-__version__ = "0.3.5"
+__version__ = "0.3.6"
 
 
 __all__ = [
