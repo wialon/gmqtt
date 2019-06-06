@@ -192,8 +192,6 @@ class Client(MqttPackageHandler):
         return self._connection.unsubscribe(topic, **kwargs)
 
     def publish(self, message_or_topic, payload=None, qos=0, retain=False, **kwargs):
-        loop = asyncio.get_event_loop()
-
         if isinstance(message_or_topic, Message):
             message = message_or_topic
         else:
