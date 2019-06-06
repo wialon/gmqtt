@@ -83,7 +83,8 @@ if __name__ == '__main__':
 gmqtt supports MQTT version 5.0 protocol
 
 #### Version setup
-Version 5.0 is used by default. If your broker does not support 5.0 protocol version, client will downgrade to 3.1 and reconnect automatically, but you can also force version in connect method:
+Version 5.0 is used by default. If your broker does not support 5.0 protocol version and responds with proper CONNACK reason code, client will downgrade to 3.1 and reconnect automatically. Note, that some brokers just fail to parse the 5.0 format CONNECT packet, so first check manually if your broker handles this properly. 
+You can also force version in connect method:
 ```python
 from gmqtt.mqtt.constants import MQTTv311
 client = MQTTClient('clientid')
