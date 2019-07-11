@@ -8,13 +8,9 @@ from .constants import MQTTv50, MQTTCommands
 logger = logging.getLogger(__name__)
 
 
-class BaseMQTTProtocol(asyncio.StreamReaderProtocol):
+class BaseMQTTProtocol:
     def __init__(self, buffer_size=2**16, loop=None):
-        if not loop:
-            loop = asyncio.get_event_loop()
-
         self._connection = None
-        self._transport = None
 
         self._connected = asyncio.Event(loop=loop)
 
@@ -30,38 +26,32 @@ class BaseMQTTProtocol(asyncio.StreamReaderProtocol):
     def _parse_packet(self):
         raise NotImplementedError
 
-    def connection_made(self, transport: asyncio.Transport):
-        super(BaseMQTTProtocol, self).connection_made(transport)
-
+    def connection_made(self, connection):
         logger.info('[CONNECTION MADE]')
-        self._transport = transport
-
+        self._connection = connection
         self._connected.set()
 
-    def data_received(self, data):
-        super(BaseMQTTProtocol, self).data_received(data)
-
     def write_data(self, data: bytes):
-        if not self._transport.is_closing():
-            self._transport.write(data)
+        if not self._connection.is_closing():
+            self._connection.write(data)
         else:
             logger.warning('[TRYING WRITE TO CLOSED SOCKET]')
 
     def connection_lost(self, exc):
         self._connected.clear()
-        super(BaseMQTTProtocol, self).connection_lost(exc)
+
         if exc:
             logger.warning('[EXC: CONN LOST]', exc_info=exc)
         else:
             logger.info('[CONN CLOSE NORMALLY]')
 
     async def read(self, n=-1):
-        bs = await self._stream_reader.read(n=n)
+        bs = await self._connection.read(n=n)
 
         # so we don't receive anything but connection is not closed -
         # let's close it manually
-        if not bs and not self._transport.is_closing():
-            self._transport.close()
+        if not bs and not self._connection.is_closing():
+            self._connection.close()
             # self.connection_lost(ConnectionResetError())
             raise ConnectionResetError("Reset connection manually.")
         return bs
@@ -79,8 +69,8 @@ class MQTTProtocol(BaseMQTTProtocol):
 
         self._read_loop_future = None
 
-    def connection_made(self, transport: asyncio.Transport):
-        super().connection_made(transport)
+    def connection_made(self, connection):
+        super().connection_made(connection)
         self._read_loop_future = asyncio.ensure_future(self._read_loop())
 
     async def send_auth_package(self, client_id, username, password, clean_session, keepalive,
@@ -182,7 +172,7 @@ class MQTTProtocol(BaseMQTTProtocol):
             try:
                 buf += await self.read(max_buff_size)
                 parsed_size = self._read_packet(buf)
-                if parsed_size == -1 or self._transport.is_closing():
+                if parsed_size == -1 or self._connection.is_closing():
                     logger.debug("[RECV EMPTY] Connection will be reset automatically.")
                     break
                 buf = buf[parsed_size:]

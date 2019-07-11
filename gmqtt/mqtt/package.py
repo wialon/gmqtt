@@ -167,7 +167,7 @@ class SubscribePacket(PackageFactory):
             subscribe_options = s.retain_handling_options << 4 | s.retain_as_published << 3 | s.no_local << 2 | s.qos
             packet.append(subscribe_options)
 
-        logger.info('[SEND SUB] %s %s', local_mid, topics)
+        logger.info('[SEND SUB] %s', topics)
 
         return local_mid, packet
 
