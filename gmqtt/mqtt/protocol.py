@@ -140,19 +140,19 @@ class MQTTProtocol(BaseMQTTProtocol):
             while True:
                 payload_byte = data[parsed_size + header_size]
                 payload_size += (payload_byte & 0x7F) * mult
-                if (mult > 128 * 128 * 128):
+                if mult > 2097152:  # 128 * 128 * 128
                     return -1
                 mult *= 128
                 header_size += 1
                 if header_size + payload_size > data_size:
-                    # not enaugh data
+                    # not enough data
                     break
                 if payload_byte & 128 == 0:
                     break
 
             # check size once more
             if header_size + payload_size > data_size:
-                # not enaugh data
+                # not enough data
                 break
 
             # determine packet type
@@ -172,7 +172,7 @@ class MQTTProtocol(BaseMQTTProtocol):
         await self._connected.wait()
 
         buf = b''
-        max_buff_size = 64 * 1024
+        max_buff_size = 65536
         while self._connected.is_set():
             try:
                 buf += await self.read(max_buff_size)

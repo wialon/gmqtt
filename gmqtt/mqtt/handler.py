@@ -225,6 +225,7 @@ class MqttPackageHandler(EventCallback):
             logger.error('[CONNACK] %s', hex(result))
             self.failed_connections += 1
             if result == 1 and self.protocol_version == MQTTv50:
+                logger.info('[CONNACK] Downgrading to MQTT 3.1 protocol version')
                 MQTTProtocol.proto_ver = MQTTv311
                 future = asyncio.ensure_future(self.reconnect(delay=True))
                 future.add_done_callback(self._handle_exception_in_future)

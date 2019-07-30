@@ -156,12 +156,12 @@ class Client(MqttPackageHandler):
         return False
 
     async def reconnect(self, delay=False):
-        # stopping auto-reconnects during reconnect procedure is important, better do not touch :(
-        self._temporatily_stop_reconnect()
-        await self._disconnect()
         if not self._allow_reconnect():
             logger.error('[DISCONNECTED] max number of failed connection attempts achieved')
             return
+        # stopping auto-reconnects during reconnect procedure is important, better do not touch :(
+        self._temporatily_stop_reconnect()
+        await self._disconnect()
         if delay:
             await asyncio.sleep(self._config['reconnect_delay'])
         try:
@@ -192,8 +192,6 @@ class Client(MqttPackageHandler):
         return self._connection.unsubscribe(topic, **kwargs)
 
     def publish(self, message_or_topic, payload=None, qos=0, retain=False, **kwargs):
-        loop = asyncio.get_event_loop()
-
         if isinstance(message_or_topic, Message):
             message = message_or_topic
         else:
