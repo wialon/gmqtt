@@ -70,10 +70,9 @@ class Client(MqttPackageHandler):
 
         self._topic_alias_maximum = kwargs.get('topic_alias_maximum', 0)
 
-        asyncio.ensure_future(self._resend_qos_messages())
+        self._resend_task = asyncio.ensure_future(self._resend_qos_messages())
 
     def _remove_message_from_query(self, mid):
-
         logger.debug('[REMOVE MESSAGE] %s', mid)
         asyncio.ensure_future(
             self._persistent_storage.remove_message_by_mid(mid)
@@ -105,7 +104,7 @@ class Client(MqttPackageHandler):
             else:
                 await asyncio.sleep(self._retry_deliver_timeout)
 
-        asyncio.ensure_future(self._resend_qos_messages())
+        self._resend_task = asyncio.ensure_future(self._resend_qos_messages())
 
     @property
     def properties(self):
@@ -180,6 +179,7 @@ class Client(MqttPackageHandler):
         await self._disconnect(reason_code=reason_code, **properties)
 
     async def _disconnect(self, reason_code=0, **properties):
+        self._resend_task.cancel()
         if self._connection:
             self._connection.send_disconnect(reason_code=reason_code, **properties)
             await self._connection.close()
