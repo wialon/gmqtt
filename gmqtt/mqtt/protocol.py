@@ -125,7 +125,8 @@ class MQTTProtocol(BaseMQTTProtocol):
 
     def _read_packet(self, data):
         parsed_size = 0
-        data_size = len(data)
+        raw_size = len(data)
+        data_size = raw_size
 
         while True:
             # try to extract packet data, minimum expected packet size is 2
@@ -138,6 +139,9 @@ class MQTTProtocol(BaseMQTTProtocol):
             payload_size = 0
 
             while True:
+                if parsed_size + header_size >= raw_size:
+                    # not full header
+                    return parsed_size
                 payload_byte = data[parsed_size + header_size]
                 payload_size += (payload_byte & 0x7F) * mult
                 if mult > 2097152:  # 128 * 128 * 128
@@ -172,7 +176,7 @@ class MQTTProtocol(BaseMQTTProtocol):
         await self._connected.wait()
 
         buf = b''
-        max_buff_size = 65536
+        max_buff_size = 65536  # 64 * 1024
         while self._connected.is_set():
             try:
                 buf += await self.read(max_buff_size)
