@@ -176,10 +176,10 @@ class Client(MqttPackageHandler):
 
     async def disconnect(self, reason_code=0, **properties):
         self.stop_reconnect()
+        self._resend_task.cancel()
         await self._disconnect(reason_code=reason_code, **properties)
 
     async def _disconnect(self, reason_code=0, **properties):
-        self._resend_task.cancel()
         if self._connection:
             self._connection.send_disconnect(reason_code=reason_code, **properties)
             await self._connection.close()
