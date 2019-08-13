@@ -78,13 +78,18 @@ class Client(MqttPackageHandler):
             self._persistent_storage.remove_message_by_mid(mid)
         )
 
+    @property
+    def is_connected(self):
+        # tells if connection is alive and CONNACK was received
+        return self._connected.is_set() and not self._connection.is_closing()
+
     async def _resend_qos_messages(self):
         await self._connected.wait()
 
         if await self._persistent_storage.is_empty:
             logger.debug('[QoS query IS EMPTY]')
             await asyncio.sleep(self._retry_deliver_timeout)
-        elif self._connection.is_closing:
+        elif self._connection.is_closing():
             logger.debug('[Some msg need to resend] Transport is closing, sleeping')
             await asyncio.sleep(self._retry_deliver_timeout)
         else:
@@ -180,6 +185,7 @@ class Client(MqttPackageHandler):
         await self._disconnect(reason_code=reason_code, **properties)
 
     async def _disconnect(self, reason_code=0, **properties):
+        self._connected.clear()
         if self._connection:
             self._connection.send_disconnect(reason_code=reason_code, **properties)
             await self._connection.close()
