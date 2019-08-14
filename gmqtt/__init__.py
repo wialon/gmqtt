@@ -1,6 +1,6 @@
 import datetime
 
-from .client import Client, Message
+from .client import Client, Message, Subscription
 from .mqtt import constants
 from .mqtt.protocol import BaseMQTTProtocol
 
@@ -12,12 +12,13 @@ __credits__ = [
     "Mikhail Turchunovich",
     "Elena Nikolaichik"
 ]
-__version__ = "0.3.9"
+__version__ = "0.4.0"
 
 
 __all__ = [
     'Client',
     'Message',
+    'Subscription',
     'BaseMQTTProtocol',
     'constants'
 ]

@@ -52,7 +52,8 @@ async def main(broker_host, broker_port, token):
 
     # two overlapping subscriptions with different subscription identifiers
     sub_client.subscribe('TEST/PROPS/#', qos=1, subscription_identifier=1)
-    sub_client.subscribe('TEST/#', qos=0, subscription_identifier=2)
+    sub_client.subscribe([gmqtt.Subscription('TEST/+', qos=1), gmqtt.Subscription('TEST', qos=0)],
+                         subscription_identifier=2)
 
     pub_client = gmqtt.Client("clientgonnapub")
 
@@ -62,6 +63,9 @@ async def main(broker_host, broker_port, token):
 
     # this message received by sub_client will have two subscription identifiers
     pub_client.publish('TEST/PROPS/42', '42 is the answer', qos=1, content_type='utf-8',
+                       message_expiry_interval=60, user_property=('time', str(time.time())))
+
+    pub_client.publish('TEST', 'Test 42', qos=1, content_type='utf-8',
                        message_expiry_interval=60, user_property=('time', str(time.time())))
 
     # just another way to publish same message
