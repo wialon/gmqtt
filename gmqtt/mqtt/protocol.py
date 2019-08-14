@@ -86,10 +86,8 @@ class MQTTProtocol(BaseMQTTProtocol):
                                                        keepalive, self, will_message=will_message, **kwargs)
         self.write_data(pkg)
 
-    def send_subscribe_packet(self, topic, qos, no_local, retain_as_published, retain_handling_options, **kwargs):
-        mid, pkg = package.SubscribePacket.build_package(
-            topic, qos, self, no_local=no_local, retain_as_published=retain_as_published,
-            retain_handling_options=retain_handling_options, **kwargs)
+    def send_subscribe_packet(self, subscription, **kwargs):
+        mid, pkg = package.SubscribePacket.build_package(subscription, self, **kwargs)
         self.write_data(pkg)
         return mid
 

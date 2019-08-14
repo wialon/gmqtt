@@ -40,6 +40,15 @@ class Message:
             raise ValueError('Payload too large.')
 
 
+class Subscription:
+    def __init__(self, topic, qos=0, no_local=False, retain_as_published=False, retain_handling_options=0):
+        self.topic = topic
+        self.qos = qos
+        self.no_local = no_local
+        self.retain_as_published = retain_as_published
+        self.retain_handling_options = retain_handling_options
+
+
 class Client(MqttPackageHandler):
     def __init__(self, client_id, clean_session=True, optimistic_acknowledgement=True,
                  will_message=None, **kwargs):
@@ -190,9 +199,19 @@ class Client(MqttPackageHandler):
             self._connection.send_disconnect(reason_code=reason_code, **properties)
             await self._connection.close()
 
-    def subscribe(self, topic, qos=0, no_local=False, retain_as_published=False, retain_handling_options=0, **kwargs):
-        return self._connection.subscribe(topic, qos, no_local=no_local, retain_as_published=retain_as_published,
-                                          retain_handling_options=retain_handling_options, **kwargs)
+    def subscribe(self, subscription_or_topic, qos=0, no_local=False, retain_as_published=False,
+                  retain_handling_options=0, **kwargs):
+        if isinstance(subscription_or_topic, Subscription):
+            subscription = subscription_or_topic
+        elif isinstance(subscription_or_topic, (tuple, list)):
+            subscription = subscription_or_topic
+        elif isinstance(subscription_or_topic, str):
+            subscription = Subscription(subscription_or_topic, qos=qos, no_local=no_local,
+                                        retain_as_published=retain_as_published,
+                                        retain_handling_options=retain_handling_options)
+        else:
+            raise ValueError('Bad subscription: must be string or Subscription or list of Subscriptions')
+        return self._connection.subscribe(subscription, **kwargs)
 
     def unsubscribe(self, topic, **kwargs):
         return self._connection.unsubscribe(topic, **kwargs)

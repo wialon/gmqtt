@@ -141,17 +141,17 @@ class UnsubscribePacket(PackageFactory):
 
 class SubscribePacket(PackageFactory):
     @classmethod
-    def build_package(cls, topic, qos, protocol, no_local=0, retain_as_published=0,
-                      retain_handling_options=0, **kwargs) -> Tuple[int, bytes]:
+    def build_package(cls, subscription, protocol, **kwargs) -> Tuple[int, bytes]:
         remaining_length = 2
-        if not isinstance(topic, (list, tuple)):
-            topics = [topic]
+        if not isinstance(subscription, (list, tuple)):
+            subscriptions = [subscription]
         else:
-            topics = topic
+            subscriptions = subscription
 
-        for t in topics:
-            remaining_length += 2 + len(t) + 1
-
+        topics = []
+        for s in subscriptions:
+            remaining_length += 2 + len(s.topic) + 1
+            topics.append(s.topic)
         properties = cls._build_properties_data(kwargs, protocol.proto_ver)
         remaining_length += len(properties)
 
@@ -162,9 +162,9 @@ class SubscribePacket(PackageFactory):
         local_mid = cls.id_generator.next_id()
         packet.extend(struct.pack("!H", local_mid))
         packet.extend(properties)
-        for t in topics:
-            cls._pack_str16(packet, t)
-            subscribe_options = retain_handling_options << 4 | retain_as_published << 3 | no_local << 2 | qos
+        for s in subscriptions:
+            cls._pack_str16(packet, s.topic)
+            subscribe_options = s.retain_handling_options << 4 | s.retain_as_published << 3 | s.no_local << 2 | s.qos
             packet.append(subscribe_options)
 
         logger.info('[SEND SUB] %s %s', local_mid, topics)

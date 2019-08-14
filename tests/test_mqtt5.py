@@ -51,6 +51,29 @@ async def test_basic(init_clients):
 
 
 @pytest.mark.asyncio
+async def test_basic_subscriptions(init_clients):
+    aclient, callback, bclient, callback2 = init_clients
+
+    await aclient.connect(host=host, port=port)
+    await bclient.connect(host=host, port=port)
+
+    subscriptions = [
+        gmqtt.Subscription(TOPICS[1], qos=1),
+        gmqtt.Subscription(TOPICS[2], qos=2),
+    ]
+    bclient.subscribe(subscriptions, user_property=('key', 'value'), subscription_identifier=1)
+
+    bclient.subscribe(gmqtt.Subscription(TOPICS[3], qos=1), user_property=('key', 'value'), subscription_identifier=2)
+    await asyncio.sleep(1)
+
+    aclient.publish(TOPICS[3], b"qos 0")
+    aclient.publish(TOPICS[1], b"qos 1", 1)
+    aclient.publish(TOPICS[2], b"qos 2", 2)
+    await asyncio.sleep(1)
+    assert len(callback2.messages) == 3
+
+
+@pytest.mark.asyncio
 async def test_retained_message(init_clients):
     aclient, callback, bclient, callback2 = init_clients
 
