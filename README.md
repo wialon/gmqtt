@@ -157,5 +157,14 @@ client.set_config({'reconnect_retries': 10, 'reconnect_delay': 60})
 Code above will set number of reconnect attempts to 10 and delay between reconnect attempts to 1min (60s). By default `reconnect_delay=6` and  `reconnect_retries=-1` which stands for infinity.
 Note that manually calling `await client.disconnect()` will set `reconnect_retries` for 0, which will stop auto reconnect.
 
+### Asynchronous on_message callback
+You can define asynchronous on_message callback.
+Note that it must return valid PUBACK code (`0` is success code, see full list in [constants](gmqtt/mqtt/constants.py#L69))
+```python
+async def on_message(client, topic, payload, qos, properties):
+    pass
+    return 0
+```
+
 ### Other examples
 Check [examples directory](examples) for more use cases.
