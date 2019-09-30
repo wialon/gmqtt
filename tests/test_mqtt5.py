@@ -122,6 +122,26 @@ async def test_will_message(init_clients):
 
 
 @pytest.mark.asyncio
+async def test_no_will_message_on_gentle_disconnect(init_clients):
+    aclient, callback, bclient, callback2 = init_clients
+
+    # re-initialize aclient with will message
+    will_message = gmqtt.Message(TOPICS[2], "I'm dead finally")
+    aclient = gmqtt.Client("myclientid3", clean_session=True, will_message=will_message)
+    aclient.set_auth_credentials(username)
+
+    await aclient.connect(host, port=port)
+
+    await bclient.connect(host=host, port=port)
+    bclient.subscribe(TOPICS[2])
+
+    await asyncio.sleep(1)
+    await aclient.disconnect(reason_code=0)
+    await asyncio.sleep(1)
+    assert len(callback2.messages) == 0
+
+
+@pytest.mark.asyncio
 async def test_shared_subscriptions(init_clients):
     aclient, callback, bclient, callback2 = init_clients
 

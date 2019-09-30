@@ -218,9 +218,12 @@ class PublishPacket(PackageFactory):
 class DisconnectPacket(PackageFactory):
     @classmethod
     def build_package(cls, protocol, reason_code=0, **properties):
-        prop_bytes = cls._build_properties_data(properties, protocol_version=protocol.proto_ver)
-        remaining_length = 1 + len(prop_bytes)
-        return struct.pack('!BBB', MQTTCommands.DISCONNECT.value, remaining_length, reason_code) + prop_bytes
+        if protocol.proto_ver == MQTTv50:
+            prop_bytes = cls._build_properties_data(properties, protocol_version=protocol.proto_ver)
+            remaining_length = 1 + len(prop_bytes)
+            return struct.pack('!BBB', MQTTCommands.DISCONNECT.value, remaining_length, reason_code) + prop_bytes
+        else:
+            return struct.pack('!BB', MQTTCommands.DISCONNECT.value, 0)
 
 
 class CommandWithMidPacket(PackageFactory):
