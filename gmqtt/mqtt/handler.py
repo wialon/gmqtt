@@ -31,7 +31,28 @@ class MQTTConnectError(MQTTError):
         3: "Connection Refused: broker unavailable",
         4: "Connection Refused: bad user name or password",
         5: "Connection Refused: not authorised",
-        10: 'Cannot handle CONNACK package'
+        10: 'Cannot handle CONNACK package',
+        128: "Connection Refused: Unspecified error",
+        129: "Connection Refused: Malformed Packet",
+        130: "Connection Refused: Protocol Error",
+        131: "Connection Refused: Implementation specific error",
+        132: "Connection Refused: Unsupported Protocol Version",
+        133: "Connection Refused: Client Identifier not valid",
+        134: "Connection Refused: Bad User Name or Password",
+        135: "Connection Refused: Not authorized",
+        136: "Connection Refused: Server unavailable",
+        137: "Connection Refused: Server busy",
+        138: "Connection Refused: Banned",
+        140: "Connection Refused: Bad authentication method",
+        144: "Connection Refused: Topic Name invalid",
+        149: "Connection Refused: Packet too large",
+        151: "Connection Refused: Quota exceeded",
+        153: "Connection Refused: Payload format invalid",
+        154: "Connection Refused: Retain not supported",
+        155: "Connection Refused: QoS not supported",
+        156: "Connection Refused: Use another server",
+        157: "Connection Refused: Server moved",
+        159: "Connection Refused: Connection rate exceeded",
     }
 
     def __init__(self, code):
@@ -222,7 +243,7 @@ class MqttPackageHandler(EventCallback):
         (flags, result) = struct.unpack("!BB", packet[:2])
 
         if result != 0:
-            logger.error('[CONNACK] %s', hex(result))
+            logger.warning('[CONNACK] %s', hex(result))
             self.failed_connections += 1
             if result == 1 and self.protocol_version == MQTTv50:
                 logger.info('[CONNACK] Downgrading to MQTT 3.1 protocol version')
