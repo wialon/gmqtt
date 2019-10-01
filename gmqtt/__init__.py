@@ -3,6 +3,7 @@ import datetime
 from .client import Client, Message, Subscription
 from .mqtt import constants
 from .mqtt.protocol import BaseMQTTProtocol
+from .mqtt.handler import MQTTConnectError
 
 __author__ = "Mikhail Turchunovich"
 __email__ = 'mitu@gurtam.com'
@@ -12,7 +13,7 @@ __credits__ = [
     "Mikhail Turchunovich",
     "Elena Nikolaichik"
 ]
-__version__ = "0.4.1"
+__version__ = "0.4.2"
 
 
 __all__ = [
@@ -20,5 +21,6 @@ __all__ = [
     'Message',
     'Subscription',
     'BaseMQTTProtocol',
+    'MQTTConnectError',
     'constants'
 ]
