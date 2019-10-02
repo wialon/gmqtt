@@ -327,7 +327,10 @@ class MqttPackageHandler(EventCallback):
     def _handle_qos_2_publish_packet(self, mid, packet, print_topic, properties):
         if self._optimistic_acknowledgement:
             self._send_pubrec(mid)
-            self.on_message(self, print_topic, packet, 2, properties)
+            if iscoroutinefunction(self.on_message):
+                asyncio.ensure_future(self.on_message(self, print_topic, packet, 2, properties))
+            else:
+                self.on_message(self, print_topic, packet, 2, properties)
         else:
             if iscoroutinefunction(self.on_message):
                 f = asyncio.ensure_future(self.on_message(self, print_topic, packet, 2, properties))
@@ -350,7 +353,10 @@ class MqttPackageHandler(EventCallback):
     def _handle_qos_1_publish_packet(self, mid, packet, print_topic, properties):
         if self._optimistic_acknowledgement:
             self._send_puback(mid)
-            self.on_message(self, print_topic, packet, 1, properties)
+            if iscoroutinefunction(self.on_message):
+                asyncio.ensure_future(self.on_message(self, print_topic, packet, 1, properties))
+            else:
+                self.on_message(self, print_topic, packet, 1, properties)
         else:
             if iscoroutinefunction(self.on_message):
                 f = asyncio.ensure_future(self.on_message(self, print_topic, packet, 2, properties))
