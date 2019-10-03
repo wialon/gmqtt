@@ -7,7 +7,7 @@ from collections import defaultdict
 from copy import deepcopy
 from functools import partial
 
-from .utils import unpack_variable_byte_integer, IdGenerator
+from .utils import unpack_variable_byte_integer, IdGenerator, run_coroutine_or_function
 from .property import Property
 from .protocol import MQTTProtocol
 from .constants import MQTTCommands, PubAckReasonCode, PubRecReasonCode, DEFAULT_CONFIG
@@ -314,31 +314,20 @@ class MqttPackageHandler(EventCallback):
             return
 
         if qos == 0:
-            if iscoroutinefunction(self.on_message):
-                asyncio.ensure_future(self.on_message(self, print_topic, packet, qos, properties))
-            else:
-                self.on_message(self, print_topic, packet, qos, properties)
-            self._id_generator.free_id(mid)
+            run_coroutine_or_function(self.on_message, self, print_topic, packet, qos, properties)
         elif qos == 1:
             self._handle_qos_1_publish_packet(mid, packet, print_topic, properties)
         elif qos == 2:
             self._handle_qos_2_publish_packet(mid, packet, print_topic, properties)
+        self._id_generator.free_id(mid)
 
     def _handle_qos_2_publish_packet(self, mid, packet, print_topic, properties):
         if self._optimistic_acknowledgement:
             self._send_pubrec(mid)
-            if iscoroutinefunction(self.on_message):
-                asyncio.ensure_future(self.on_message(self, print_topic, packet, 2, properties))
-            else:
-                self.on_message(self, print_topic, packet, 2, properties)
+            run_coroutine_or_function(self.on_message, self, print_topic, packet, 2, properties)
         else:
-            if iscoroutinefunction(self.on_message):
-                f = asyncio.ensure_future(self.on_message(self, print_topic, packet, 2, properties))
-                f.add_done_callback(partial(self.__handle_publish_callback, qos=2, mid=mid))
-            else:
-                reason_code = self.on_message(self, print_topic, packet, 2, properties)
-                if reason_code not in (c.value for c in PubRecReasonCode):
-                    raise ValueError('Invalid PUBREC reason code {}'.format(reason_code))
+            run_coroutine_or_function(self.on_message, self, print_topic, packet, 2, properties,
+                                      callback=partial(self.__handle_publish_callback, qos=2, mid=mid))
 
     def __handle_publish_callback(self, f, qos=None, mid=None):
         reason_code = f.result()
@@ -353,21 +342,10 @@ class MqttPackageHandler(EventCallback):
     def _handle_qos_1_publish_packet(self, mid, packet, print_topic, properties):
         if self._optimistic_acknowledgement:
             self._send_puback(mid)
-            if iscoroutinefunction(self.on_message):
-                asyncio.ensure_future(self.on_message(self, print_topic, packet, 1, properties))
-            else:
-                self.on_message(self, print_topic, packet, 1, properties)
+            run_coroutine_or_function(self.on_message, self, print_topic, packet, 1, properties)
         else:
-            if iscoroutinefunction(self.on_message):
-                f = asyncio.ensure_future(self.on_message(self, print_topic, packet, 2, properties))
-                f.add_done_callback(partial(self.__handle_publish_callback, qos=1, mid=mid))
-            else:
-                reason_code = self.on_message(self, print_topic, packet, 1, properties)
-                if reason_code not in (c.value for c in PubAckReasonCode):
-                    raise ValueError('Invalid PUBACK reason code {}'.format(reason_code))
-                self._send_puback(mid, reason_code=reason_code)
-
-        self._id_generator.free_id(mid)
+            run_coroutine_or_function(self.on_message, self, print_topic, packet, 1, properties,
+                                      callback=partial(self.__handle_publish_callback, qos=1, mid=mid))
 
     def __call__(self, cmd, packet):
         try:
