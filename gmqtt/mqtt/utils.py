@@ -1,5 +1,8 @@
+import asyncio
 import struct
 import logging
+
+from functools import partial
 
 
 logger = logging.getLogger(__name__)
@@ -97,3 +100,18 @@ def pack_utf8(data):
     packet.extend(struct.pack("!H", len(data)))
     packet.extend(data)
     return packet
+
+
+def iscoroutinefunction_or_partial(object):
+    if isinstance(object, partial):
+        object = object.func
+    return asyncio.iscoroutinefunction(object)
+
+
+def run_coroutine_or_function(func, *args, callback=None, **kwargs):
+    if iscoroutinefunction_or_partial(func):
+        f = asyncio.ensure_future(func(*args, **kwargs))
+        if callback is not None:
+            f.add_done_callback(callback)
+    else:
+        func(*args, **kwargs)
