@@ -2,6 +2,7 @@
 
 ### Python MQTT client implementation.
 
+![](./static/logo.png)
 
 ### Installation 
 
