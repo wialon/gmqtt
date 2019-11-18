@@ -25,12 +25,13 @@ class MqttClientWrapper:
         """Publish a message to the MQTT topic"""
         self.client.publish(topic, message, qos)
 
-    async def subscribe(self, topic: str, qos: int) -> Tuple[str, bytes]:
+    async def subscribe(self, topic: str, qos: int) -> Tuple[str, Message]:
         """Subscribe to messages on the MQTT topic"""
 
         def _on_message(client, topic, payload, qos, properties):
-            # TODO: Handle recieved message when queue full
-            self.message_queue.put_nowait((topic, payload))
+            # TODO: Handle recieved message when queue full (drop a qos=0 packet)
+            message = Message(topic, payload, qos=qos, **properties)
+            self.message_queue.put_nowait((topic, message))
 
         self.client.on_message = _on_message
 
