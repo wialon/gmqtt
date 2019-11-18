@@ -69,7 +69,7 @@ class Connect:
         self._disconnect_future = self.loop.create_future()
         self._receive_maximum = receive_maximum
 
-    async def _connect(self, broker_host) -> MqttClientProtocol:
+    async def _connect(self, broker_host) -> MqttClientWrapper:
         def _on_connect(client, flags, rc, properties):
             self._connect_future.set_result(client)
 
@@ -86,9 +86,9 @@ class Connect:
         await self.client.disconnect()
         return await self._disconnect_future
 
-    async def __aenter__(self) -> MqttClientProtocol:
+    async def __aenter__(self) -> MqttClientWrapper:
         client = await self._connect(self.broker_host)
-        return MqttClientProtocol(
+        return MqttClientWrapper(
             client, self.loop, recieve_maximum=self._receive_maximum
         )
 
