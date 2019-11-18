@@ -9,14 +9,17 @@ class MqttClientWrapper:
     """
 
     def __init__(
-        self, inner_client: Client, loop: Optional[asyncio.AbstractEventLoop] = None
+        self,
+        inner_client: Client,
+        loop: Optional[asyncio.AbstractEventLoop] = None,
+        receive_maximum: Optional[int] = None,
     ):
         if loop is None:
             loop = asyncio.get_event_loop()
         self.loop = loop
 
         self.client = inner_client
-        self.message_queue = asyncio.Queue()
+        self.message_queue = asyncio.Queue(maxsize=receive_maximum or 0)
 
     async def publish(self, topic: str, message: Message, qos=0):
         """Publish a message to the MQTT topic"""
@@ -26,11 +29,14 @@ class MqttClientWrapper:
         """Subscribe to messages on the MQTT topic"""
 
         def _on_message(client, topic, payload, qos, properties):
+            # TODO: Handle recieved message when queue full
             self.message_queue.put_nowait((topic, payload))
 
         self.client.on_message = _on_message
 
         self.client.subscribe(topic, qos)
+
+        # TODO: Hold off sending PUBACK until this point
         return await self.message_queue.get()
 
 
@@ -49,16 +55,18 @@ class Connect:
         client_id: str,
         broker_host: str,
         loop: Optional[asyncio.AbstractEventLoop] = None,
+        receive_maximum: Optional[int] = None,
     ):
 
         if loop is None:
             loop = asyncio.get_event_loop()
         self.loop = loop
 
-        self.client = Client(client_id)
+        self.client = Client(client_id, receive_maximum=receive_maximum)
         self.broker_host = broker_host
         self._connect_future = self.loop.create_future()
         self._disconnect_future = self.loop.create_future()
+        self._receive_maximum = receive_maximum
 
     async def _connect(self, broker_host) -> MqttClientProtocol:
         def _on_connect(client, flags, rc, properties):
@@ -79,7 +87,9 @@ class Connect:
 
     async def __aenter__(self) -> MqttClientProtocol:
         client = await self._connect(self.broker_host)
-        return MqttClientProtocol(client, self.loop)
+        return MqttClientProtocol(
+            client, self.loop, recieve_maximum=self._receive_maximum
+        )
 
     async def __aexit__(self, exc_type, exc_value, traceback):
         await self._disconnect()
