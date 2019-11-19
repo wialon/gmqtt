@@ -19,8 +19,7 @@ class Subscription:
         return self
 
     async def __anext__(self):
-        while True:
-            return await self.receive()
+        return await self.receive()
 
     async def unsubscribe(self):
         await self._on_unsubscribe()
@@ -109,9 +108,11 @@ class Connect:
     An async context manager that provides a connected MQTT Client.
     Responsible for setting up and tearing down the client.
 
-    >>> async with Connect('iot.eclipse.org') as client:
+    >>> async with connect('iot.eclipse.org') as client:
     >>>     await client.publish('test/message', 'hello world', qos=1)
-    >>>     message = await client.subscribe('test/message')
+
+    >>> client = await connect('iot.eclipse.org')
+    >>> await client.publish('test/message', 'hello world', qos=1)
     """
 
     def __init__(
@@ -153,11 +154,17 @@ class Connect:
         await self.client.disconnect()
         return await self._disconnect_future
 
-    async def __aenter__(self) -> MqttClientWrapper:
+    def __await__(self):
+        return self.__await_impl__().__await__()
+
+    async def __await_impl__(self):
         client = await self._connect(self.broker_host)
         return MqttClientWrapper(
             client, self.loop, receive_maximum=self._receive_maximum
         )
+
+    async def __aenter__(self) -> MqttClientWrapper:
+        return await self
 
     async def __aexit__(self, exc_type, exc_value, traceback):
         await self._disconnect()
