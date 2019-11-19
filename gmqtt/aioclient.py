@@ -15,6 +15,13 @@ class Subscription:
         # TODO: Hold off sending PUBACK for `message` until this point
         return message
 
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        while True:
+            return await self.receive()
+
     async def unsubscribe(self):
         await self._on_unsubscribe()
 
