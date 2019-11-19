@@ -1,6 +1,25 @@
 import asyncio
+import collections
+from typing import Optional, Tuple, Callable
+
 from .client import Client, Message
-from typing import Optional, Tuple
+
+
+class Subscription:
+    def __init__(self, on_unsubscribe: Callable):
+        self._incoming_messages = asyncio.Queue()
+
+    async def receive(self):
+        """Receive the next message published to this subscription"""
+        message = await self._incoming_messages.get()
+        # TODO: Hold off sending PUBACK for `message` until this point
+        return message
+
+    async def unsubscribe(self):
+        await self._on_unsubscribe()
+
+    def _add_message(self, message: Message):
+        self._incoming_messages.put_nowait(message)
 
 
 class MqttClientWrapper:
@@ -20,25 +39,62 @@ class MqttClientWrapper:
 
         self.client = inner_client
         self.message_queue = asyncio.Queue(maxsize=receive_maximum or 0)
+        self._subscriptions = collections.defaultdict(set)
+        self._init_client()
+
+    def _init_client(self):
+        """Set up client so messages are forwarded to registered subscriptions:"""
+
+        def _on_message(client, topic, payload, qos, properties):
+            """When message received: Forward message to subscriptions that match `topic`"""
+            message = Message(topic, payload, qos=qos, **properties)
+
+            # TODO: Match subscriptions with wildcards
+            for sub in self._subscriptions[topic]:
+                # TODO: Handle recieved message when queue full (drop a qos=0 packet)
+                sub._add_message(message)
+
+        self.client.on_message = _on_message
 
     async def publish(self, topic: str, message: Message, qos=0):
         """Publish a message to the MQTT topic"""
         self.client.publish(topic, message, qos)
 
-    async def subscribe(self, topic: str, qos: int) -> Tuple[str, Message]:
-        """Subscribe to messages on the MQTT topic"""
+    class Subscribe(collections.abc.Awaitable):
+        def __init__(self, client_wrapper, topic, qos=0):
+            self.topic = topic
+            self.qos = qos
+            self.client_wrapper = client_wrapper
 
-        def _on_message(client, topic, payload, qos, properties):
-            # TODO: Handle recieved message when queue full (drop a qos=0 packet)
-            message = Message(topic, payload, qos=qos, **properties)
-            self.message_queue.put_nowait((topic, message))
+        def __await__(self):
+            return self.__await_impl__().__await__()
 
-        self.client.on_message = _on_message
+        async def __await_impl__(self):
+            subscription = Subscription(on_unsubscribe=self._unsubscribe)
+            self.client_wrapper._subscriptions[self.topic].add(subscription)
+            self.client_wrapper.client.subscribe(self.topic, self.qos)
 
-        self.client.subscribe(topic, qos)
+            return subscription
 
-        # TODO: Hold off sending PUBACK until this point
-        return await self.message_queue.get()
+        async def _unsubscribe(self):
+            self.client_wrapper.client.unsubscribe(self.topic)
+            # TODO: Await unsubscribe callback
+
+        async def __aenter__(self):
+            return await self
+
+        async def __aexit__(self, exc_type, exc_value, traceback):
+            # TODO: Wait for unsubscribe callback (future)
+            await self._unsubscribe()
+
+    def subscribe(self, topic) -> collections.abc.Awaitable:
+        """Subscribe the client to a topic"""
+
+        # Developers Notes:
+        # This returns an awaitable object (`Subscribe`) that sets up the `Subscription`.
+
+        client_wrapper = self
+        return self.Subscribe(client_wrapper, topic)
 
 
 class Connect:
@@ -63,7 +119,11 @@ class Connect:
             loop = asyncio.get_event_loop()
         self.loop = loop
 
-        self.client = Client(client_id, receive_maximum=receive_maximum)
+        client_args = {}
+        if receive_maximum:
+            client_args["receive_maximum"] = receive_maximum
+
+        self.client = Client(client_id, **client_args)
         self.broker_host = broker_host
         self._connect_future = self.loop.create_future()
         self._disconnect_future = self.loop.create_future()
@@ -89,7 +149,7 @@ class Connect:
     async def __aenter__(self) -> MqttClientWrapper:
         client = await self._connect(self.broker_host)
         return MqttClientWrapper(
-            client, self.loop, recieve_maximum=self._receive_maximum
+            client, self.loop, receive_maximum=self._receive_maximum
         )
 
     async def __aexit__(self, exc_type, exc_value, traceback):
