@@ -117,8 +117,8 @@ class Connect:
 
     def __init__(
         self,
-        client_id: str,
         broker_host: str,
+        client_id: Optional[str] = None,
         loop: Optional[asyncio.AbstractEventLoop] = None,
         receive_maximum: Optional[int] = None,
     ):
