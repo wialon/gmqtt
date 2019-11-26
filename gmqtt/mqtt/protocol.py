@@ -19,6 +19,9 @@ class BaseMQTTProtocol(asyncio.StreamReaderProtocol):
         self._connected = asyncio.Event(loop=loop)
 
         reader = asyncio.StreamReader(limit=buffer_size, loop=loop)
+        # this is bad hack for python 3.8
+        # TODO: get rid of StreamReader dependency (deprecated)
+        self._hard_reader = reader
         super(BaseMQTTProtocol, self).__init__(reader, loop=loop)
 
     def set_connection(self, conn):
