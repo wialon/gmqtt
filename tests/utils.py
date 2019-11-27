@@ -49,25 +49,26 @@ class Callbacks:
         client.on_subscribe = self.on_subscribe
 
 
-async def clean_retained(host, port, username, password=None):
+async def clean_retained(host, port, username, password=None, prefix=None):
     def on_message(client, topic, payload, qos, properties):
         curclient.publish(topic, b"", qos=0, retain=True)
 
-    curclient = gmqtt.Client("clean retained".encode("utf-8"), clean_session=True)
+    curclient = gmqtt.Client(prefix + "cleanretained", clean_session=True)
 
     curclient.set_auth_credentials(username, password)
     curclient.on_message = on_message
     await curclient.connect(host=host, port=port)
-    curclient.subscribe("#")
+    topic = '#' if not prefix else prefix + '#'
+    curclient.subscribe(topic)
     await asyncio.sleep(10)  # wait for all retained messages to arrive
     await curclient.disconnect()
     time.sleep(.1)
 
 
-async def cleanup(host, port=1883, username=None, password=None, client_ids=None):
+async def cleanup(host, port=1883, username=None, password=None, client_ids=None, prefix=None):
     # clean all client state
     print("clean up starting")
-    client_ids = client_ids or ("myclientid", "myclientid2", "myclientid3")
+    client_ids = client_ids or (prefix + "myclientid", prefix + "myclientid2", prefix + "myclientid3")
 
     for clientid in client_ids:
         curclient = gmqtt.Client(clientid.encode("utf-8"), clean_session=True)
@@ -78,5 +79,5 @@ async def cleanup(host, port=1883, username=None, password=None, client_ids=None
         time.sleep(.1)
 
     # clean retained messages
-    await clean_retained(host, port, username, password=password)
+    await clean_retained(host, port, username, password=password, prefix=prefix)
     print("clean up finished")
