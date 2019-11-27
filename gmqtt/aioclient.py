@@ -36,8 +36,8 @@ class MqttClientWrapper:
     def __init__(
         self,
         inner_client: Client,
-        loop: Optional[asyncio.AbstractEventLoop] = None,
         receive_maximum: Optional[int] = None,
+        loop: Optional[asyncio.AbstractEventLoop] = None,
     ):
         if loop is None:
             loop = asyncio.get_event_loop()
@@ -93,14 +93,14 @@ class MqttClientWrapper:
             # TODO: Wait for unsubscribe callback (future)
             await self._unsubscribe()
 
-    def subscribe(self, topic) -> collections.abc.Awaitable:
+    def subscribe(self, topic, qos=0) -> collections.abc.Awaitable:
         """Subscribe the client to a topic"""
 
         # Developers Notes:
         # This returns an awaitable object (`Subscribe`) that sets up the `Subscription`.
 
         client_wrapper = self
-        return self.Subscribe(client_wrapper, topic)
+        return self.Subscribe(client_wrapper, topic=topic, qos=qos)
 
 
 class Connect:
@@ -119,6 +119,7 @@ class Connect:
         self,
         broker_host: str,
         client_id: Optional[str] = None,
+        clean_session=True,
         loop: Optional[asyncio.AbstractEventLoop] = None,
         receive_maximum: Optional[int] = None,
     ):
@@ -129,7 +130,7 @@ class Connect:
         if receive_maximum:
             client_args["receive_maximum"] = receive_maximum
 
-        self.client = Client(client_id, **client_args)
+        self.client = Client(client_id, clean_session=clean_session, **client_args)
         self.broker_host = broker_host
         self._connect_future = self.loop.create_future()
         self._disconnect_future = self.loop.create_future()
@@ -158,7 +159,7 @@ class Connect:
     async def __await_impl__(self):
         client = await self._connect(self.broker_host)
         return MqttClientWrapper(
-            client, self.loop, receive_maximum=self._receive_maximum
+            client, loop=self.loop, receive_maximum=self._receive_maximum
         )
 
     async def __aenter__(self) -> MqttClientWrapper:
