@@ -123,9 +123,7 @@ class Connect:
         receive_maximum: Optional[int] = None,
     ):
 
-        if loop is None:
-            loop = asyncio.get_event_loop()
-        self.loop = loop
+        self.loop = loop or asyncio.get_event_loop()
 
         client_args = {}
         if receive_maximum:
