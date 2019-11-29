@@ -78,7 +78,7 @@ class MqttClientWrapper:
         async def __await_impl__(self):
             subscription = Subscription(on_unsubscribe=self._unsubscribe)
             self.client_wrapper._subscriptions[self.topic].add(subscription)
-            self.client_wrapper.client.subscribe(self.topic, self.qos)
+            self.client_wrapper.client.subscribe(self.topic, qos=self.qos)
 
             return subscription
 
