@@ -77,17 +77,15 @@ class EventCallback(object):
         self._on_unsubscribe_callback = _empty_callback
 
         self._config = deepcopy(DEFAULT_CONFIG)
-        self._reconnects_config_cache = None
+        self._reconnecting_now = False
 
         self.failed_connections = 0
 
     def _temporatily_stop_reconnect(self):
-        self._reconnects_config_cache = self._config['reconnect_retries']
-        self.stop_reconnect()
+        self._reconnecting_now = True
 
-    def _restore_config(self):
-        if self._reconnects_config_cache is not None:
-            self._config['reconnect_retries'] = self._reconnects_config_cache
+    def _exit_reconnecting_state(self):
+        self._reconnecting_now = False
 
     def stop_reconnect(self):
         self._config['reconnect_retries'] = 0
@@ -96,18 +94,21 @@ class EventCallback(object):
         self._config.update(config)
 
     @property
-    def _reconnect(self):
-        if self.reconnect_retries == -1:
-            return True
-        return bool(self.reconnect_retries)
-
-    @property
     def reconnect_delay(self):
         return self._config['reconnect_delay']
+
+    @reconnect_delay.setter
+    def reconnect_delay(self, value):
+        self._config['reconnect_delay'] = value
 
     @property
     def reconnect_retries(self):
         return self._config['reconnect_retries']
+
+    @reconnect_retries.setter
+    def reconnect_retries(self, value):
+        self._config['reconnect_retries'] = value
+
 
     @property
     def on_subscribe(self):
@@ -212,9 +213,8 @@ class MqttPackageHandler(EventCallback):
         logger.warning('[UNKNOWN CMD] %s %s', hex(cmd), packet)
 
     def _handle_disconnect_packet(self, cmd, packet):
-        if self._reconnect:
-            future = asyncio.ensure_future(self.reconnect(delay=True))
-            future.add_done_callback(self._handle_exception_in_future)
+        future = asyncio.ensure_future(self.reconnect(delay=True))
+        future.add_done_callback(self._handle_exception_in_future)
         self.on_disconnect(self, packet)
 
     def _parse_properties(self, packet):
@@ -253,8 +253,7 @@ class MqttPackageHandler(EventCallback):
                 return
             else:
                 self._error = MQTTConnectError(result)
-                if self._reconnect:
-                    asyncio.ensure_future(self.reconnect(delay=True))
+                asyncio.ensure_future(self.reconnect(delay=True))
                 return
         else:
             self.failed_connections = 0
