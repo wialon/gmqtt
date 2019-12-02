@@ -8,5 +8,5 @@ pytest==4.5.0
 pytest-asyncio==0.10.0
 pytest-cov==2.7.1
 six==1.12.0
-uvloop==0.12.2
+uvloop==0.14.0
 codecov==2.0.15
