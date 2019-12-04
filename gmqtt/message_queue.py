@@ -62,7 +62,7 @@ class Subscription:
         return self
 
     async def __anext__(self):
-        return await self.receive()
+        return await self.recv()
 
     async def unsubscribe(self):
         await self._on_unsubscribe()
