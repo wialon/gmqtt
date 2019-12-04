@@ -23,7 +23,7 @@ class MqttClientWrapper:
 
         self.client = inner_client
 
-        receive_maximum = receive_maximum or 65665
+        receive_maximum = receive_maximum or 65665  # FIXME: Sane default?
 
         self.subscription_manager = SubscriptionManager(receive_maximum)
         # self.message_queue = asyncio.Queue(maxsize=receive_maximum or 0)
