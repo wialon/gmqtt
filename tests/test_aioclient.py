@@ -7,6 +7,7 @@ from gmqtt.message_queue import TopicFilter
 # TODO: Fixtures
 # Mock client
 
+
 @pytest.mark.asyncio
 async def test_plain_subscription():
     sm = message_queue.SubscriptionManager(999)
@@ -45,11 +46,12 @@ def test_match_topic_filter_multilevel_wildcard():
     assert tf.match("topic/")
     assert tf.match("topic")
 
+
 def test_invalid_multilevel_wildcard():
 
     with pytest.raises(ValueError) as exc:
         TopicFilter("sport/tennis/#/ranking")
-    
+
     with pytest.raises(ValueError):
         TopicFilter("#/tailing")
 
