@@ -3,29 +3,7 @@ import collections
 from typing import Optional, Tuple, Callable
 
 from .client import Client, Message
-
-
-class Subscription:
-    def __init__(self, on_unsubscribe: Callable):
-        self._incoming_messages = asyncio.Queue()
-
-    async def receive(self):
-        """Receive the next message published to this subscription"""
-        message = await self._incoming_messages.get()
-        # TODO: Hold off sending PUBACK for `message` until this point
-        return message
-
-    def __aiter__(self):
-        return self
-
-    async def __anext__(self):
-        return await self.receive()
-
-    async def unsubscribe(self):
-        await self._on_unsubscribe()
-
-    def _add_message(self, message: Message):
-        self._incoming_messages.put_nowait(message)
+from .message_queue import SubscriptionManager
 
 
 class MqttClientWrapper:
@@ -44,21 +22,20 @@ class MqttClientWrapper:
         self.loop = loop
 
         self.client = inner_client
-        self.message_queue = asyncio.Queue(maxsize=receive_maximum or 0)
-        self._subscriptions = collections.defaultdict(set)
+
+        receive_maximum = receive_maximum or 65665
+
+        self.subscription_manager = SubscriptionManager(receive_maximum)
+        # self.message_queue = asyncio.Queue(maxsize=receive_maximum or 0)
+        # JKelf._subscriptions = collections.defaultdict(set)
         self._init_client()
 
     def _init_client(self):
         """Set up client so messages are forwarded to registered subscriptions:"""
 
         def _on_message(client, topic, payload, qos, properties):
-            """When message received: Forward message to subscriptions that match `topic`"""
-            message = Message(topic, payload, qos=qos, **properties)
-
-            # TODO: Match subscriptions with wildcards
-            for sub in self._subscriptions[topic]:
-                # TODO: Handle recieved message when queue full (drop a qos=0 packet)
-                sub._add_message(message)
+            message = Message(client=client, topic=topic, payload=payload, **properties)
+            self.subscription_manager.on_message(message)
 
         self.client.on_message = _on_message
 
@@ -76,8 +53,9 @@ class MqttClientWrapper:
             return self.__await_impl__().__await__()
 
         async def __await_impl__(self):
-            subscription = Subscription(on_unsubscribe=self._unsubscribe)
-            self.client_wrapper._subscriptions[self.topic].add(subscription)
+            subscription = await self.client_wrapper.subscription_manager.add_subscription(
+                self.topic
+            )
             self.client_wrapper.client.subscribe(self.topic, qos=self.qos)
 
             return subscription
