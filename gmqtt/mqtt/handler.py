@@ -191,6 +191,9 @@ class MqttPackageHandler(EventCallback):
     def _send_pubrel(self, mid, dup, reason_code=0):
         self._send_command_with_mid(MQTTCommands.PUBREL | 2, mid, dup, reason_code=reason_code)
 
+    def _send_pubcomp(self, mid, dup, reason_code=0):
+        self._send_command_with_mid(MQTTCommands.PUBCOMP, mid, dup, reason_code=reason_code)
+
     def __get_handler__(self, cmd):
         cmd_type = cmd & 0xF0
         if cmd_type not in self._handler_cache:
@@ -397,13 +400,15 @@ class MqttPackageHandler(EventCallback):
         pass
 
     def _handle_pubrec_packet(self, cmd, packet):
-        pass
+        (mid,) = struct.unpack("!H", packet[:2])
+        logger.info('[RECEIVED PUBREC FOR] %s', mid)
+        self._id_generator.free_id(mid)
+        self._remove_message_from_query(mid)
+        self._send_pubrel(mid, 0)
 
     def _handle_pubrel_packet(self, cmd, packet):
-        mid, = struct.unpack("!H", packet)
+        (mid, ) = struct.unpack("!H", packet[:2])
+        logger.info('[RECEIVED PUBREL FOR] %s', mid)
+        self._send_pubcomp(mid, 0)
+
         self._id_generator.free_id(mid)
-
-        if mid not in self._messages_in:
-            return
-
-        topic, payload, qos = self._messages_in[mid]
