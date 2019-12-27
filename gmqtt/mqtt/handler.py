@@ -79,6 +79,9 @@ class EventCallback(object):
         self._config = deepcopy(DEFAULT_CONFIG)
         self._reconnecting_now = False
 
+        # this flag should be True after connect and False when disconnect was called
+        self._is_active = False
+
         self.failed_connections = 0
 
     def _temporatily_stop_reconnect(self):

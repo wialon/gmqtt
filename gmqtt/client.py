@@ -137,6 +137,7 @@ class Client(MqttPackageHandler):
         self._port = port
         self._ssl = ssl
         self._keepalive = keepalive
+        self._is_active = True
 
         MQTTProtocol.proto_ver = version
 
@@ -162,7 +163,7 @@ class Client(MqttPackageHandler):
         return connection
 
     def _allow_reconnect(self):
-        if self._reconnecting_now:
+        if self._reconnecting_now or not self._is_active:
             return False
         if self._config['reconnect_retries'] == UNLIMITED_RECONNECTS:
             return True
@@ -191,7 +192,7 @@ class Client(MqttPackageHandler):
                                     will_message=self._will_message, **self._connect_properties)
 
     async def disconnect(self, reason_code=0, **properties):
-        self.stop_reconnect()
+        self._is_active = False
         self._resend_task.cancel()
         await self._disconnect(reason_code=reason_code, **properties)
 
