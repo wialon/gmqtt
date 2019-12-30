@@ -36,8 +36,8 @@ setup(name='gmqtt',
       zip_safe=True,
       install_requires=[],
       tests_requires=[
-          'pytest==3.8.0',
-          'pytest-cov==2.6.0',
-          'pytest-asyncio==0.9.0',
+          'pytest==4.5.0',
+          'pytest-cov==2.7.1',
+          'pytest-asyncio==0.10.0',
       ]
       )
