@@ -28,18 +28,18 @@ CLASSIFIERS = [
 KEYWORDS = "Gurtam MQTT client."
 
 TESTS_REQUIRE = [
-    "atomicwrites==1.3.0",
-    "attrs==19.1.0",
-    "codecov==2.0.15",
-    "coverage==4.5.3",
-    "more-itertools==7.0.0",
-    "pluggy==0.11.0",
-    "py==1.8.0",
-    "pytest-asyncio==0.10.0",
-    "pytest-cov==2.7.1",
-    "pytest==4.5.0",
-    "six==1.12.0",
-    "uvloop==0.14.0",
+    "atomicwrites>=1.3.0",
+    "attrs>=19.1.0",
+    "codecov>=2.0.15",
+    "coverage>=4.5.3",
+    "more-itertools>=7.0.0",
+    "pluggy>=0.11.0",
+    "py>=1.8.0",
+    "pytest-asyncio>=0.10.0",
+    "pytest-cov>=2.7.1",
+    "pytest>=4.5.0",
+    "six>=1.12.0",
+    "uvloop>=0.14.0",
 ]
 
 # Allow you to run pip install .[test] to get test dependencies included
