@@ -160,7 +160,7 @@ async def test_shared_subscriptions(init_clients):
     bclient.subscribe(shared_sub_topic)
     bclient.subscribe(TOPICS[0])
 
-    pubclient = gmqtt.Client("myclient3", clean_session=True)
+    pubclient = gmqtt.Client(PREFIX + "myclient3", clean_session=True)
     pubclient.set_auth_credentials(username)
     await pubclient.connect(host, port)
 

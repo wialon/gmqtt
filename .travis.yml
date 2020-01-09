@@ -4,7 +4,7 @@ python:
   - "3.7"
   - "3.6"
 install:
-  - pip install -r test_requirements.txt
+  - pip install -r requirements_test.txt
 # command to run tests
 script:
   - pytest --cov=gmqtt
