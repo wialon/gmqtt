@@ -53,6 +53,7 @@ setup(
     long_description_content_type="text/markdown",
     author=gmqtt.__author__,
     author_email=gmqtt.__email__,
+    license='MIT',
     url="https://github.com/wialon/gmqtt",
     packages=find_packages(),
     download_url="https://github.com/wialon/gmqtt",
