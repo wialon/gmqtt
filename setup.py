@@ -55,7 +55,7 @@ setup(
     author_email=gmqtt.__email__,
     license='MIT',
     url="https://github.com/wialon/gmqtt",
-    packages=find_packages(),
+    packages=find_packages(exclude=['examples', 'tests']),
     download_url="https://github.com/wialon/gmqtt",
     classifiers=CLASSIFIERS,
     keywords=KEYWORDS,
