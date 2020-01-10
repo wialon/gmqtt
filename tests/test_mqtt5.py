@@ -7,11 +7,18 @@ import pytest
 import gmqtt
 from tests.utils import Callbacks, cleanup, clean_retained
 
-host = 'mqtt.flespi.io'
-port = 1883
-username = os.getenv('USERNAME', 'fake_token')
+if os.getenv('TOKEN'):
+    host = 'mqtt.flespi.io'
+    username = os.getenv("TOKEN")
+    password = None
+    port = 1883
+else:
+    host = os.getenv("HOST", "127.0.0.1")
+    username = os.getenv("USERNAME", "")
+    password = os.getenv("PASSWORD", None)
+    port = os.getenv("PORT", 1883)
 
-PREFIX = str(time.time()) + '/'
+PREFIX = 'GMQTT/' + str(time.time()) + '/'
 
 TOPICS = (PREFIX + "TopicA", PREFIX + "TopicA/B", PREFIX + "TopicA/C", PREFIX + "TopicA/D", PREFIX + "/TopicA")
 WILDTOPICS = (PREFIX + "TopicA/+", PREFIX + "+/C", PREFIX + "#", PREFIX + "/#", PREFIX + "/+", PREFIX + "+/+", PREFIX + "TopicA/#")
