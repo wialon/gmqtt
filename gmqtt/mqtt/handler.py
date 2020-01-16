@@ -212,8 +212,8 @@ class MqttPackageHandler(EventCallback):
 
     def _handle_exception_in_future(self, future):
         if not future.exception():
+            logger.warning('[EXC OCCURED] in reconnect future %s', future.exception())
             return
-        self.on_disconnect(self, packet=None, exc=future.exception())
 
     def _default_handler(self, cmd, packet):
         logger.warning('[UNKNOWN CMD] %s %s', hex(cmd), packet)
