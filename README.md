@@ -45,7 +45,7 @@ def on_message(client, topic, payload, qos, properties):
 def on_disconnect(client, packet, exc=None):
     print('Disconnected')
 
-def on_subscribe(client, mid, qos):
+def on_subscribe(client, mid, qos, properties):
     print('SUBSCRIBED')
 
 def ask_exit(*args):

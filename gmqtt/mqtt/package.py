@@ -141,12 +141,8 @@ class UnsubscribePacket(PackageFactory):
 
 class SubscribePacket(PackageFactory):
     @classmethod
-    def build_package(cls, subscription, protocol, **kwargs) -> Tuple[int, bytes]:
+    def build_package(cls, subscriptions, protocol, **kwargs) -> Tuple[int, bytes]:
         remaining_length = 2
-        if not isinstance(subscription, (list, tuple)):
-            subscriptions = [subscription]
-        else:
-            subscriptions = subscription
 
         topics = []
         for s in subscriptions:

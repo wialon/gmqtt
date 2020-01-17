@@ -363,11 +363,22 @@ class MqttPackageHandler(EventCallback):
     def _handle_suback_packet(self, cmd, raw_packet):
         pack_format = "!H" + str(len(raw_packet) - 2) + 's'
         (mid, packet) = struct.unpack(pack_format, raw_packet)
-        pack_format = "!" + "B" * len(packet)
-        granted_qos = struct.unpack(pack_format, packet)
+        properties, packet = self._parse_properties(packet)
 
-        logger.info('[SUBACK] %s %s', mid, granted_qos)
-        self.on_subscribe(self, mid, granted_qos)
+        pack_format = "!" + "B" * len(packet)
+        granted_qoses = struct.unpack(pack_format, packet)
+
+        subs = self.get_subscriptions_by_mid(mid)
+        for granted_qos, sub in zip(granted_qoses, subs):
+            if granted_qos >= 128:
+                # subscription was not acknowledged
+                sub.acknowledged = False
+            else:
+                sub.acknowledged = True
+                sub.qos = granted_qos
+
+        logger.info('[SUBACK] %s %s', mid, granted_qoses)
+        self.on_subscribe(self, mid, granted_qoses, properties)
 
         self._id_generator.free_id(mid)
 
