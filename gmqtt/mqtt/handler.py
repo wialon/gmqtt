@@ -211,7 +211,7 @@ class MqttPackageHandler(EventCallback):
         self._last_msg_in = time.monotonic()
 
     def _handle_exception_in_future(self, future):
-        if not future.exception():
+        if future.exception():
             logger.warning('[EXC OCCURED] in reconnect future %s', future.exception())
             return
 
