@@ -63,18 +63,18 @@ async def main(broker_host, broker_port, token):
 
     # this message received by sub_client will have two subscription identifiers
     pub_client.publish('TEST/PROPS/42', '42 is the answer', qos=1, content_type='utf-8',
-                       message_expiry_interval=60, user_property=('time', str(time.time())))
+                       message_expiry_interval=60, topic_alias=42, user_property=('time', str(time.time())))
 
-    pub_client.publish('TEST', 'Test 42', qos=1, content_type='utf-8',
-                       message_expiry_interval=60, user_property=('time', str(time.time())))
+    pub_client.publish('TEST/42', 'Test 42', qos=1, content_type='utf-8',
+                       message_expiry_interval=60, topic_alias=1, user_property=('time', str(time.time())))
 
     # just another way to publish same message
-    msg = gmqtt.Message('TEST/PROPS/42', '42 is the answer', qos=1, content_type='utf-8',
-                        message_expiry_interval=60, user_property=('time', str(time.time())))
+    msg = gmqtt.Message('', '42 is the answer again', qos=1, content_type='utf-8',
+                        message_expiry_interval=60, topic_alias=42, user_property=('time', str(time.time())))
     pub_client.publish(msg)
 
     pub_client.publish('TEST/42', {42: 'is the answer'}, qos=1, content_type='json',
-                       message_expiry_interval=60, user_property=('time', str(time.time())))
+                       message_expiry_interval=60, topic_alias=1,  user_property=('time', str(time.time())))
 
     await STOP.wait()
     await pub_client.disconnect()
