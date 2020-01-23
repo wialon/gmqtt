@@ -380,6 +380,9 @@ class MqttPackageHandler(EventCallback):
         logger.info('[SUBACK] %s %s', mid, granted_qoses)
         self.on_subscribe(self, mid, granted_qoses, properties)
 
+        for sub in self.subscriptions:
+            if sub.mid == mid:
+                sub.mid = None
         self._id_generator.free_id(mid)
 
     def _handle_unsuback_packet(self, cmd, raw_packet):
