@@ -33,8 +33,8 @@ class Callbacks:
                      .format(client._client_id, topic, payload, qos, properties))
         self.messages.append((topic, payload, qos, properties))
 
-    def on_subscribe(self, client, mid, qos):
-        logging.info('[SUBSCRIBED {}] QOS: {}'.format(client._client_id, qos))
+    def on_subscribe(self, client, mid, qos, properties):
+        logging.info('[SUBSCRIBED {}] QOS: {}, properties: {}'.format(client._client_id, qos, properties))
         self.subscribeds.append(mid)
 
     def on_connect(self, client, flags, rc, properties):

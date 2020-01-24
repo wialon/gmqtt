@@ -26,7 +26,17 @@ def on_disconnect(client, packet, exc=None):
 
 
 def on_subscribe(client, mid, qos, properties):
-    logging.info('[SUBSCRIBED {}] QOS: {}'.format(client._client_id, qos))
+    # in order to check if all the subscriptions were successful, we should first get all subscriptions with this
+    # particular mid (from one subscription request)
+    subscriptions = client.get_subscriptions_by_mid(mid)
+    for subscription, granted_qos in zip(subscriptions, qos):
+        # in case of bad suback code, we can resend  subscription
+        if granted_qos >= gmqtt.constants.SubAckReasonCode.UNSPECIFIED_ERROR.value:
+            logging.warning('[RETRYING SUB {}] mid {}, reason code: {}, properties {}'.format(
+                            client._client_id, mid, granted_qos, properties))
+            client.resubscribe(subscription)
+        logging.info('[SUBSCRIBED {}] mid {}, QOS: {}, properties {}'.format(
+            client._client_id, mid, granted_qos, properties))
 
 
 def assign_callbacks_to_client(client):
@@ -44,16 +54,18 @@ def ask_exit(*args):
 async def main(broker_host, broker_port, token):
     # create client instance, kwargs (session expiry interval and maximum packet size)
     # will be send as properties in connect packet
-    sub_client = gmqtt.Client("clientgonnasub", session_expiry_interval=600, maximum_packet_size=65535)
+    sub_client = gmqtt.Client("clientgonnasub")
 
     assign_callbacks_to_client(sub_client)
     sub_client.set_auth_credentials(token, None)
     await sub_client.connect(broker_host, broker_port)
 
     # two overlapping subscriptions with different subscription identifiers
-    sub_client.subscribe('TEST/PROPS/#', qos=1, subscription_identifier=1)
-    sub_client.subscribe([gmqtt.Subscription('TEST/+', qos=1), gmqtt.Subscription('TEST', qos=0)],
-                         subscription_identifier=2)
+    subscriptions = [
+        gmqtt.Subscription('TEST/PROPS/#', qos=1),
+        gmqtt.Subscription('TEST2/PROPS/#', qos=2),
+    ]
+    sub_client.subscribe(subscriptions, subscription_identifier=1)
 
     pub_client = gmqtt.Client("clientgonnapub")
 
@@ -63,18 +75,9 @@ async def main(broker_host, broker_port, token):
 
     # this message received by sub_client will have two subscription identifiers
     pub_client.publish('TEST/PROPS/42', '42 is the answer', qos=1, content_type='utf-8',
-                       message_expiry_interval=60, topic_alias=42, user_property=('time', str(time.time())))
-
-    pub_client.publish('TEST/42', 'Test 42', qos=1, content_type='utf-8',
-                       message_expiry_interval=60, topic_alias=1, user_property=('time', str(time.time())))
-
-    # just another way to publish same message
-    msg = gmqtt.Message('', '42 is the answer again', qos=1, content_type='utf-8',
-                        message_expiry_interval=60, topic_alias=42, user_property=('time', str(time.time())))
-    pub_client.publish(msg)
-
-    pub_client.publish('TEST/42', {42: 'is the answer'}, qos=1, content_type='json',
-                       message_expiry_interval=60, topic_alias=1,  user_property=('time', str(time.time())))
+                       message_expiry_interval=60, user_property=('time', str(time.time())))
+    pub_client.publish('TEST2/PROPS/42', '42 is the answer', qos=1, content_type='utf-8',
+                       message_expiry_interval=60, user_property=('time', str(time.time())))
 
     await STOP.wait()
     await pub_client.disconnect()

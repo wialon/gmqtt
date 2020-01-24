@@ -45,7 +45,7 @@ def on_message(client, topic, payload, qos, properties):
 def on_disconnect(client, packet, exc=None):
     print('Disconnected')
 
-def on_subscribe(client, mid, qos):
+def on_subscribe(client, mid, qos, properties):
     print('SUBSCRIBED')
 
 def ask_exit(*args):
@@ -135,6 +135,7 @@ This properties will be also sent in publish packet from broker, they will be pa
 * `content_type` - `unicode` UTF-8 Encoded String describing the content of the Application Message. The value of the Content Type is defined by the sending and receiving application.
 * `user_property` - `tuple(str, str)`
 * `subscription_identifier` - `int` (see subscribe properties) sent by broker
+* `topic_alias` - `int` First client publishes messages with topic string and kwarg topic_alias. After this initial message client can publish message with empty string topic and same topic_alias kwarg.
 
 Example:
 ```

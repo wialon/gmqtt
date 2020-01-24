@@ -23,7 +23,7 @@ def on_disconnect(client, packet, exc=None):
     logging.info('[DISCONNECTED {}]'.format(client._client_id))
 
 
-def on_subscribe(client, mid, qos):
+def on_subscribe(client, mid, qos, properties):
     logging.info('[SUBSCRIBED {}] QOS: {}'.format(client._client_id, qos))
 
 

@@ -211,7 +211,7 @@ class MqttPackageHandler(EventCallback):
         self._last_msg_in = time.monotonic()
 
     def _handle_exception_in_future(self, future):
-        if not future.exception():
+        if future.exception():
             logger.warning('[EXC OCCURED] in reconnect future %s', future.exception())
             return
 
@@ -363,12 +363,26 @@ class MqttPackageHandler(EventCallback):
     def _handle_suback_packet(self, cmd, raw_packet):
         pack_format = "!H" + str(len(raw_packet) - 2) + 's'
         (mid, packet) = struct.unpack(pack_format, raw_packet)
+        properties, packet = self._parse_properties(packet)
+
         pack_format = "!" + "B" * len(packet)
-        granted_qos = struct.unpack(pack_format, packet)
+        granted_qoses = struct.unpack(pack_format, packet)
 
-        logger.info('[SUBACK] %s %s', mid, granted_qos)
-        self.on_subscribe(self, mid, granted_qos)
+        subs = self.get_subscriptions_by_mid(mid)
+        for granted_qos, sub in zip(granted_qoses, subs):
+            if granted_qos >= 128:
+                # subscription was not acknowledged
+                sub.acknowledged = False
+            else:
+                sub.acknowledged = True
+                sub.qos = granted_qos
 
+        logger.info('[SUBACK] %s %s', mid, granted_qoses)
+        self.on_subscribe(self, mid, granted_qoses, properties)
+
+        for sub in self.subscriptions:
+            if sub.mid == mid:
+                sub.mid = None
         self._id_generator.free_id(mid)
 
     def _handle_unsuback_packet(self, cmd, raw_packet):

@@ -101,7 +101,7 @@ PROPERTIES = [
                                          'DISCONNECT', 'AUTH']),
     Property(33, '!H', 'receive_maximum', ['CONNECT', 'CONNACK']),
     Property(34, '!H', 'topic_alias_maximum', ['CONNECT', 'CONNACK']),
-    Property(35, '!H', 'topic_alias', ['CONNECT', 'CONNACK']),
+    Property(35, '!H', 'topic_alias', ['PUBLISH']),
     Property(36, '!B', 'max_qos', ['CONNACK', ]),
     Property(37, '!B', 'retain_available', ['CONNACK', ]),
     Property(38, 'u8x2', 'user_property', ['CONNECT', 'CONNACK', 'PUBLISH', 'PUBACK', 'PUBREC', 'PUBREL',
