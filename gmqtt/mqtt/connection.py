@@ -19,7 +19,7 @@ class MQTTConnection(object):
         self._last_data_in = time.monotonic()
         self._last_data_out = time.monotonic()
 
-        self._keep_connection_callback = asyncio.get_event_loop().call_later(self._keepalive, self._keep_connection)
+        self._keep_connection_callback = asyncio.get_event_loop().call_later(self._keepalive / 2, self._keep_connection)
 
     @classmethod
     async def create_connection(cls, host, port, ssl, clean_session, keepalive, loop=None):
@@ -36,9 +36,9 @@ class MQTTConnection(object):
             asyncio.ensure_future(self.close())
             return
 
-        if time.monotonic() - self._last_data_in >= self._keepalive:
+        if time.monotonic() - self._last_data_in >= 0.8 * self._keepalive:
             self._send_ping_request()
-        self._keep_connection_callback = asyncio.get_event_loop().call_later(self._keepalive, self._keep_connection)
+        self._keep_connection_callback = asyncio.get_event_loop().call_later(self._keepalive / 2, self._keep_connection)
 
     def put_package(self, pkg):
         self._last_data_in = time.monotonic()
