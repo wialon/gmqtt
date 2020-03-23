@@ -96,6 +96,7 @@ class Connect:
     def __init__(
         self,
         broker_host: str,
+        broker_port: int = 1883,
         client_id: Optional[str] = None,
         clean_session=True,
         loop: Optional[asyncio.AbstractEventLoop] = None,
@@ -110,17 +111,18 @@ class Connect:
 
         self.client = Client(client_id, clean_session=clean_session, **client_args)
         self.broker_host = broker_host
+        self.broker_port = broker_port
         self._connect_future = self.loop.create_future()
         self._disconnect_future = self.loop.create_future()
         self._receive_maximum = receive_maximum
 
-    async def _connect(self, broker_host) -> MqttClientWrapper:
+    async def _connect(self) -> MqttClientWrapper:
         def _on_connect(client, flags, rc, properties):
             self._connect_future.set_result(client)
 
         self.client.on_connect = _on_connect
 
-        await self.client.connect(broker_host)
+        await self.client.connect(self.broker_host, self.broker_port)
         return await self._connect_future
 
     async def _disconnect(self):
@@ -135,7 +137,7 @@ class Connect:
         return self.__await_impl__().__await__()
 
     async def __await_impl__(self):
-        client = await self._connect(self.broker_host)
+        client = await self._connect()
         return MqttClientWrapper(
             client, loop=self.loop, receive_maximum=self._receive_maximum
         )
