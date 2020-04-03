@@ -1,6 +1,6 @@
 import asyncio
 import logging
-import struct
+import time
 
 from . import package
 from .constants import MQTTv50, MQTTCommands
@@ -42,6 +42,7 @@ class BaseMQTTProtocol(asyncio.StreamReaderProtocol):
         super(BaseMQTTProtocol, self).data_received(data)
 
     def write_data(self, data: bytes):
+        self._connection._last_data_out = time.monotonic()
         if self._transport and not self._transport.is_closing():
             self._transport.write(data)
         else:

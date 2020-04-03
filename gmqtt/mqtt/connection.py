@@ -28,7 +28,7 @@ class MQTTConnection(object):
         return MQTTConnection(transport, protocol, clean_session, keepalive)
 
     def _keep_connection(self):
-        if self.is_closing():
+        if self.is_closing() or not self._keepalive:
             return
 
         if time.monotonic() - self._last_data_in >= 2 * self._keepalive:
@@ -36,7 +36,7 @@ class MQTTConnection(object):
             asyncio.ensure_future(self.close())
             return
 
-        if time.monotonic() - self._last_data_in >= 0.8 * self._keepalive:
+        if time.monotonic() - self._last_data_out >= 0.8 * self._keepalive:
             self._send_ping_request()
         self._keep_connection_callback = asyncio.get_event_loop().call_later(self._keepalive / 2, self._keep_connection)
 
@@ -47,6 +47,7 @@ class MQTTConnection(object):
     def send_package(self, package):
         # This is not blocking operation, because transport place the data
         # to the buffer, and this buffer flushing async
+        self._last_data_out = time.monotonic()
         if isinstance(package, (bytes, bytearray)):
             package = package
         else:
@@ -88,3 +89,14 @@ class MQTTConnection(object):
 
     def is_closing(self):
         return self._transport.is_closing()
+
+    @property
+    def keepalive(self):
+        return self._keepalive
+
+    @keepalive.setter
+    def keepalive(self, value):
+        if self._keepalive == value:
+            return
+        self._keepalive = value
+        self._keep_connection_callback = asyncio.get_event_loop().call_later(self._keepalive / 2, self._keep_connection)

@@ -243,6 +243,12 @@ class MqttPackageHandler(EventCallback):
         properties_dict = dict(properties_dict)
         return properties_dict, left_packet
 
+    def _update_keepalive_if_needed(self):
+        if not self._connack_properties.get('server_keep_alive'):
+            return
+        self._keepalive = self._connack_properties['server_keep_alive']
+        self._connection.keepalive = self._keepalive
+
     def _handle_connack_packet(self, cmd, packet):
         self._connected.set()
 
@@ -270,6 +276,7 @@ class MqttPackageHandler(EventCallback):
                 self._error = MQTTConnectError(10)
                 asyncio.ensure_future(self.disconnect())
             self._connack_properties = properties
+            self._update_keepalive_if_needed()
 
         # TODO: Implement checking for the flags and results
         # see 3.2.2.3 Connect Return code of the http://docs.oasis-open.org/mqtt/mqtt/v3.1.1/os/mqtt-v3.1.1-os.pdf
