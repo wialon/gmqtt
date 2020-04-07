@@ -31,12 +31,14 @@ class MQTTConnection(object):
         if self.is_closing() or not self._keepalive:
             return
 
-        if time.monotonic() - self._last_data_in >= 2 * self._keepalive:
+        time_ = time.monotonic()
+        if time_ - self._last_data_in >= 2 * self._keepalive:
             logger.warning("[LOST HEARTBEAT FOR %s SECONDS, GOING TO CLOSE CONNECTION]", 2 * self._keepalive)
             asyncio.ensure_future(self.close())
             return
 
-        if time.monotonic() - self._last_data_out >= 0.8 * self._keepalive:
+        if time_ - self._last_data_out >= 0.8 * self._keepalive or \
+                time_ - self._last_data_in >= 0.8 * self._keepalive:
             self._send_ping_request()
         self._keep_connection_callback = asyncio.get_event_loop().call_later(self._keepalive / 2, self._keep_connection)
 
@@ -84,7 +86,8 @@ class MQTTConnection(object):
         self._handler = handler
 
     async def close(self):
-        self._keep_connection_callback.cancel()
+        if self._keep_connection_callback:
+            self._keep_connection_callback.cancel()
         self._transport.close()
 
     def is_closing(self):
@@ -99,4 +102,6 @@ class MQTTConnection(object):
         if self._keepalive == value:
             return
         self._keepalive = value
+        if self._keep_connection_callback:
+            self._keep_connection_callback.cancel()
         self._keep_connection_callback = asyncio.get_event_loop().call_later(self._keepalive / 2, self._keep_connection)
