@@ -35,9 +35,9 @@ TESTS_REQUIRE = [
     "more-itertools>=7.0.0",
     "pluggy>=0.11.0",
     "py>=1.8.0",
-    "pytest-asyncio>=0.10.0",
+    "pytest-asyncio==0.10.0",
     "pytest-cov>=2.7.1",
-    "pytest>=4.5.0",
+    "pytest>=5.4.0",
     "six>=1.12.0",
     "uvloop>=0.14.0",
 ]
