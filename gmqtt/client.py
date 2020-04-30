@@ -226,13 +226,22 @@ class Client(MqttPackageHandler):
 
     def update_subscriptions_with_subscription_or_topic(
             self, subscription_or_topic, qos, no_local, retain_as_published, retain_handling_options, kwargs):
-        subscription_identifier = kwargs.get('subscription_identifier')
+
+        sentinel = object()
+        subscription_identifier = kwargs.get('subscription_identifier', sentinel)
+
         if isinstance(subscription_or_topic, Subscription):
-            subscription_or_topic.subscription_identifier = subscription_identifier
+
+            if subscription_identifier is not sentinel:
+                subscription_or_topic.subscription_identifier = subscription_identifier
+
             subscriptions = [subscription_or_topic]
         elif isinstance(subscription_or_topic, (tuple, list)):
-            for sub in subscription_or_topic:
-                sub.subscription_identifier = subscription_identifier
+
+            if subscription_identifier is not sentinel:
+                for sub in subscription_or_topic:
+                    sub.subscription_identifier = subscription_identifier
+
             subscriptions = subscription_or_topic
         elif isinstance(subscription_or_topic, str):
             subscriptions = [Subscription(subscription_or_topic, qos=qos, no_local=no_local,
