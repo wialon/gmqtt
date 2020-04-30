@@ -220,6 +220,11 @@ class Client(MqttPackageHandler):
 
     def subscribe(self, subscription_or_topic: Union[str, Subscription, Sequence[Subscription]],
                   qos=0, no_local=False, retain_as_published=False, retain_handling_options=0, **kwargs):
+
+        # Warn: if you will pass a few subscriptions objects, and each will be have different
+        # subscription identifier - the only first will be used as identifier
+        # if only you will not pass the identifier in kwargs
+
         subscriptions = self.update_subscriptions_with_subscription_or_topic(
             subscription_or_topic, qos, no_local, retain_as_published, retain_handling_options, kwargs)
         return self._connection.subscribe(subscriptions, **kwargs)

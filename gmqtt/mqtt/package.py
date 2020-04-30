@@ -140,14 +140,27 @@ class UnsubscribePacket(PackageFactory):
 
 
 class SubscribePacket(PackageFactory):
+    sentinel = object()
+
     @classmethod
     def build_package(cls, subscriptions, protocol, **kwargs) -> Tuple[int, bytes]:
         remaining_length = 2
 
         topics = []
+        subscription_identifier = kwargs.get('subscription_identifier', cls.sentinel)
+
         for s in subscriptions:
             remaining_length += 2 + len(s.topic) + 1
             topics.append(s.topic)
+
+            # if subscription_identifier hasn't been passed in kwargs,
+            # we will use the first identifier for all subscriptions;
+            if subscription_identifier is cls.sentinel:
+                subscription_identifier = s.subscription_identifier
+
+        if subscription_identifier is not cls.sentinel:
+            kwargs['subscription_identifier'] = subscription_identifier
+
         properties = cls._build_properties_data(kwargs, protocol.proto_ver)
         remaining_length += len(properties)
 
