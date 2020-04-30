@@ -249,6 +249,10 @@ class Client(MqttPackageHandler):
 
             subscriptions = subscription_or_topic
         elif isinstance(subscription_or_topic, str):
+
+            if subscription_identifier is sentinel:
+                subscription_identifier = None
+
             subscriptions = [Subscription(subscription_or_topic, qos=qos, no_local=no_local,
                                           retain_as_published=retain_as_published,
                                           retain_handling_options=retain_handling_options,

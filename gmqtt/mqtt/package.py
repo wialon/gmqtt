@@ -161,6 +161,9 @@ class SubscribePacket(PackageFactory):
         if subscription_identifier is not cls.sentinel:
             kwargs['subscription_identifier'] = subscription_identifier
 
+        if subscription_identifier is None:
+            kwargs.pop('subscription_identifier', None)
+
         properties = cls._build_properties_data(kwargs, protocol.proto_ver)
         remaining_length += len(properties)
 
