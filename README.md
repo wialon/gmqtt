@@ -1,6 +1,7 @@
-[![Build Status](https://travis-ci.com/wialon/gmqtt.svg?branch=master)](https://travis-ci.com/wialon/gmqtt) [![codecov](https://codecov.io/gh/wialon/gmqtt/branch/master/graph/badge.svg)](https://codecov.io/gh/wialon/gmqtt)
+[![PyPI version](https://badge.fury.io/py/gmqtt.svg)](https://badge.fury.io/py/gmqtt) [![Build Status](https://travis-ci.com/wialon/gmqtt.svg?branch=master)](https://travis-ci.com/wialon/gmqtt) [![codecov](https://codecov.io/gh/wialon/gmqtt/branch/master/graph/badge.svg)](https://codecov.io/gh/wialon/gmqtt)
 
-### Python MQTT client implementation.
+
+### gmqtt: Python async MQTT client implementation.
 
 ![](./static/logo.png)
 

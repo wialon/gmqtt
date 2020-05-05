@@ -20,8 +20,18 @@ else:
 
 PREFIX = 'GMQTT/' + str(time.time()) + '/'
 
-TOPICS = (PREFIX + "TopicA", PREFIX + "TopicA/B", PREFIX + "TopicA/C", PREFIX + "TopicA/D", PREFIX + "/TopicA")
-WILDTOPICS = (PREFIX + "TopicA/+", PREFIX + "+/C", PREFIX + "#", PREFIX + "/#", PREFIX + "/+", PREFIX + "+/+", PREFIX + "TopicA/#")
+TOPICS = (PREFIX + "TopicA",
+          PREFIX + "TopicA/B",
+          PREFIX + "TopicA/C",
+          PREFIX + "TopicA/D",
+          PREFIX + "/TopicA")
+WILDTOPICS = (PREFIX + "TopicA/+",
+              PREFIX + "+/C",
+              PREFIX + "#",
+              PREFIX + "/#",
+              PREFIX + "/+",
+              PREFIX + "+/+",
+              PREFIX + "TopicA/#")
 NOSUBSCRIBE_TOPICS = (PREFIX + "test/nosubscribe",)
 
 
