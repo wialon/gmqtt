@@ -2,13 +2,34 @@ import asyncio
 import logging
 import time
 
+import sys
+
 from . import package
 from .constants import MQTTv50, MQTTCommands
 
 logger = logging.getLogger(__name__)
 
 
-class BaseMQTTProtocol(asyncio.StreamReaderProtocol):
+class _StreamReaderProtocolCompatibilityMixin:
+    def __init__(self, *args, **kwargs):
+        if sys.version_info < (3, 7):
+            self._closed = asyncio.get_event_loop().create_future()
+        super(_StreamReaderProtocolCompatibilityMixin, self).__init__(*args, **kwargs)
+
+    def connection_lost(self, exc):
+        super(_StreamReaderProtocolCompatibilityMixin, self).connection_lost(exc)
+
+        if sys.version_info[:2] >= (3, 7):
+            return
+
+        if not self._closed.done():
+            if exc is None:
+                self._closed.set_result(None)
+            else:
+                self._closed.set_exception(exc)
+
+
+class BaseMQTTProtocol(_StreamReaderProtocolCompatibilityMixin, asyncio.StreamReaderProtocol):
     def __init__(self, buffer_size=2**16, loop=None):
         if not loop:
             loop = asyncio.get_event_loop()
