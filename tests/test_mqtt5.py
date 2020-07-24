@@ -173,7 +173,7 @@ async def test_shared_subscriptions(init_clients):
     aclient.subscribe(shared_sub_topic)
     aclient.subscribe(TOPICS[0])
 
-    await   bclient.connect(host=host, port=port)
+    await bclient.connect(host=host, port=port)
     bclient.subscribe(shared_sub_topic)
     bclient.subscribe(TOPICS[0])
 
@@ -207,6 +207,8 @@ async def test_shared_subscriptions(init_clients):
     assert len(callback.messages) + len(callback2.messages) == count
     assert len(callback.messages) > 0
     assert len(callback2.messages) > 0
+
+    await pubclient.disconnect()
 
 
 @pytest.mark.asyncio

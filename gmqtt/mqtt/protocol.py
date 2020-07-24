@@ -16,7 +16,7 @@ class BaseMQTTProtocol(asyncio.StreamReaderProtocol):
         self._connection = None
         self._transport = None
 
-        self._connected = asyncio.Event(loop=loop)
+        self._connected = asyncio.Event()
 
         reader = asyncio.StreamReader(limit=buffer_size, loop=loop)
         # this is bad hack for python 3.8
@@ -26,6 +26,10 @@ class BaseMQTTProtocol(asyncio.StreamReaderProtocol):
 
     def set_connection(self, conn):
         self._connection = conn
+
+    @property
+    def closed(self):
+        return self._closed
 
     def _parse_packet(self):
         raise NotImplementedError
@@ -198,6 +202,7 @@ class MQTTProtocol(BaseMQTTProtocol):
     def connection_lost(self, exc):
         super(MQTTProtocol, self).connection_lost(exc)
         self._connection.put_package((MQTTCommands.DISCONNECT, b''))
+
         if self._read_loop_future is not None:
             self._read_loop_future.cancel()
             self._read_loop_future = None

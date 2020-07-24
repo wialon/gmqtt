@@ -89,6 +89,7 @@ class MQTTConnection(object):
         if self._keep_connection_callback:
             self._keep_connection_callback.cancel()
         self._transport.close()
+        await self._protocol.closed
 
     def is_closing(self):
         return self._transport.is_closing()
