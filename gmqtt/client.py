@@ -174,6 +174,7 @@ class Client(MqttPackageHandler):
     async def _create_connection(self, host, port, ssl, clean_session, keepalive):
         # important for reconnects, make sure u know what u are doing if wanna change :(
         self._exit_reconnecting_state()
+        self._clear_topics_aliases()
         connection = await MQTTConnection.create_connection(host, port, ssl, clean_session, keepalive)
         connection.set_handler(self)
         return connection
@@ -213,6 +214,8 @@ class Client(MqttPackageHandler):
         await self._disconnect(reason_code=reason_code, **properties)
 
     async def _disconnect(self, reason_code=0, **properties):
+        self._clear_topics_aliases()
+
         self._connected.clear()
         if self._connection:
             self._connection.send_disconnect(reason_code=reason_code, **properties)
