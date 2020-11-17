@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 class Message:
     def __init__(self, topic, payload, qos=0, retain=False, **kwargs):
-        self.topic = topic
+        self.topic = topic.encode('utf-8', errors='replace') if isinstance(topic, str) else str
         self.qos = qos
         self.retain = retain
         self.dup = False

@@ -150,8 +150,12 @@ class SubscribePacket(PackageFactory):
         subscription_identifier = kwargs.get('subscription_identifier', cls.sentinel)
 
         for s in subscriptions:
-            remaining_length += 2 + len(s.topic) + 1
-            topics.append(s.topic)
+            topic = s.topic
+            if isinstance(topic, str):
+                topic = topic.encode()
+
+            remaining_length += 2 + len(topic) + 1
+            topics.append(topic)
 
             # if subscription_identifier hasn't been passed in kwargs,
             # we will use the first identifier for all subscriptions;
