@@ -480,5 +480,5 @@ async def test_reconnection_with_failure(init_clients):
 
     # Check aclient is still working after reconnection
     aclient.publish(TOPICS[0], b"test")
-    await asyncio.sleep(1)
+    await asyncio.sleep(5)
     assert len(callback2.messages) == 1
