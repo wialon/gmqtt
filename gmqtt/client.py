@@ -194,7 +194,10 @@ class Client(MqttPackageHandler):
             return
         # stopping auto-reconnects during reconnect procedure is important, better do not touch :(
         self._temporatily_stop_reconnect()
-        await self._disconnect()
+        try:
+            await self._disconnect()
+        except:
+            logger.info('[RECONNECT] ignored error while disconnecting, trying to reconnect anyway')
         if delay:
             await asyncio.sleep(self._config['reconnect_delay'])
         try:
