@@ -7,8 +7,10 @@ dist/
 # virtualenvs
 env/
 pyenv/
+.venv/
 
 # pytest
 .coverage
 .pytest_cache/
 htmlcov/
+.mypy_cache/
