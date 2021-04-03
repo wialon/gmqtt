@@ -9,6 +9,12 @@ class BasePersistentStorage(object):
         raise NotImplementedError
 
     def push_message_nowait(self, mid, raw_package) -> asyncio.Future:
+        try:
+            asyncio.get_event_loop()
+        except RuntimeError as err:
+            if "There is no current event loop in thread" in str(err): 
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)   
         return asyncio.ensure_future(self.push_message(mid, raw_package))
 
     async def pop_message(self) -> Tuple[int, bytes]:
