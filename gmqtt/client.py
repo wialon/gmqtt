@@ -164,9 +164,7 @@ class Client(MqttPackageHandler):
                                     **self._connect_properties)
         await self._connected.wait()
 
-        loop = asyncio.get_event_loop()
-        while not await self._persistent_storage.is_empty:
-            await loop.create_future()
+        await self._persistent_storage.wait_empty()
 
         if raise_exc and self._error:
             raise self._error
