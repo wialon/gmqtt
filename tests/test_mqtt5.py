@@ -478,7 +478,9 @@ async def test_reconnection_with_failure(init_clients):
         disconnect_mock.side_effect = ConnectionAbortedError("error")
         await aclient.reconnect()
 
+    await asyncio.sleep(3)
+
     # Check aclient is still working after reconnection
     aclient.publish(TOPICS[0], b"test")
-    await asyncio.sleep(5)
+    await asyncio.sleep(3)
     assert len(callback2.messages) == 1

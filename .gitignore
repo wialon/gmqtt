@@ -6,6 +6,7 @@ dist/
 
 # virtualenvs
 env/
+venv/
 pyenv/
 
 # pytest
