@@ -57,7 +57,74 @@ class Subscription:
         self.subscription_identifier = subscription_identifier
 
 
-class Client(MqttPackageHandler):
+class SubscriptionsHandler:
+    def __init__(self):
+        self.subscriptions = []
+
+    def update_subscriptions_with_subscription_or_topic(
+            self, subscription_or_topic, qos, no_local, retain_as_published, retain_handling_options, kwargs):
+
+        sentinel = object()
+        subscription_identifier = kwargs.get('subscription_identifier', sentinel)
+
+        if isinstance(subscription_or_topic, Subscription):
+
+            if subscription_identifier is not sentinel:
+                subscription_or_topic.subscription_identifier = subscription_identifier
+
+            subscriptions = [subscription_or_topic]
+        elif isinstance(subscription_or_topic, (tuple, list)):
+
+            if subscription_identifier is not sentinel:
+                for sub in subscription_or_topic:
+                    sub.subscription_identifier = subscription_identifier
+
+            subscriptions = subscription_or_topic
+        elif isinstance(subscription_or_topic, str):
+
+            if subscription_identifier is sentinel:
+                subscription_identifier = None
+
+            subscriptions = [Subscription(subscription_or_topic, qos=qos, no_local=no_local,
+                                          retain_as_published=retain_as_published,
+                                          retain_handling_options=retain_handling_options,
+                                          subscription_identifier=subscription_identifier)]
+        else:
+            raise ValueError('Bad subscription: must be string or Subscription or list of Subscriptions')
+        self.subscriptions.extend(subscriptions)
+        return subscriptions
+
+    def _remove_subscriptions(self, topic: Union[str, Sequence[str]]):
+        if isinstance(topic, str):
+            self.subscriptions = [s for s in self.subscriptions if s.topic != topic]
+        else:
+            self.subscriptions = [s for s in self.subscriptions if s.topic not in topic]
+
+    def subscribe(self, subscription_or_topic: Union[str, Subscription, Sequence[Subscription]],
+                  qos=0, no_local=False, retain_as_published=False, retain_handling_options=0, **kwargs):
+
+        # Warn: if you will pass a few subscriptions objects, and each will be have different
+        # subscription identifier - the only first will be used as identifier
+        # if only you will not pass the identifier in kwargs
+
+        subscriptions = self.update_subscriptions_with_subscription_or_topic(
+            subscription_or_topic, qos, no_local, retain_as_published, retain_handling_options, kwargs)
+        return self._connection.subscribe(subscriptions, **kwargs)
+
+    def resubscribe(self, subscription: Subscription, **kwargs):
+        # send subscribe packet for subscription,that's already in client's subscription list
+        if 'subscription_identifier' in kwargs:
+            subscription.subscription_identifier = kwargs['subscription_identifier']
+        elif subscription.subscription_identifier is not None:
+            kwargs['subscription_identifier'] = subscription.subscription_identifier
+        return self._connection.subscribe([subscription], **kwargs)
+
+    def unsubscribe(self, topic: Union[str, Sequence[str]], **kwargs):
+        self._remove_subscriptions(topic)
+        return self._connection.unsubscribe(topic, **kwargs)
+
+
+class Client(MqttPackageHandler, SubscriptionsHandler):
     def __init__(self, client_id, clean_session=True, optimistic_acknowledgement=True,
                  will_message=None, **kwargs):
         super(Client, self).__init__(optimistic_acknowledgement=optimistic_acknowledgement)
@@ -88,8 +155,6 @@ class Client(MqttPackageHandler):
         self._topic_alias_maximum = kwargs.get('topic_alias_maximum', 0)
 
         self._resend_task = asyncio.ensure_future(self._resend_qos_messages())
-
-        self.subscriptions = []
 
     def get_subscription_by_identifier(self, subscription_identifier):
         return next((sub for sub in self.subscriptions if sub.subscription_identifier == subscription_identifier), None)
@@ -221,61 +286,6 @@ class Client(MqttPackageHandler):
         if self._connection:
             self._connection.send_disconnect(reason_code=reason_code, **properties)
             await self._connection.close()
-
-    def subscribe(self, subscription_or_topic: Union[str, Subscription, Sequence[Subscription]],
-                  qos=0, no_local=False, retain_as_published=False, retain_handling_options=0, **kwargs):
-
-        # Warn: if you will pass a few subscriptions objects, and each will be have different
-        # subscription identifier - the only first will be used as identifier
-        # if only you will not pass the identifier in kwargs
-
-        subscriptions = self.update_subscriptions_with_subscription_or_topic(
-            subscription_or_topic, qos, no_local, retain_as_published, retain_handling_options, kwargs)
-        return self._connection.subscribe(subscriptions, **kwargs)
-
-    def update_subscriptions_with_subscription_or_topic(
-            self, subscription_or_topic, qos, no_local, retain_as_published, retain_handling_options, kwargs):
-
-        sentinel = object()
-        subscription_identifier = kwargs.get('subscription_identifier', sentinel)
-
-        if isinstance(subscription_or_topic, Subscription):
-
-            if subscription_identifier is not sentinel:
-                subscription_or_topic.subscription_identifier = subscription_identifier
-
-            subscriptions = [subscription_or_topic]
-        elif isinstance(subscription_or_topic, (tuple, list)):
-
-            if subscription_identifier is not sentinel:
-                for sub in subscription_or_topic:
-                    sub.subscription_identifier = subscription_identifier
-
-            subscriptions = subscription_or_topic
-        elif isinstance(subscription_or_topic, str):
-
-            if subscription_identifier is sentinel:
-                subscription_identifier = None
-
-            subscriptions = [Subscription(subscription_or_topic, qos=qos, no_local=no_local,
-                                          retain_as_published=retain_as_published,
-                                          retain_handling_options=retain_handling_options,
-                                          subscription_identifier=subscription_identifier)]
-        else:
-            raise ValueError('Bad subscription: must be string or Subscription or list of Subscriptions')
-        self.subscriptions.extend(subscriptions)
-        return subscriptions
-
-    def resubscribe(self, subscription: Subscription, **kwargs):
-        # send subscribe packet for subscription,that's already in client's subscription list
-        if 'subscription_identifier' in kwargs:
-            subscription.subscription_identifier = kwargs['subscription_identifier']
-        elif subscription.subscription_identifier is not None:
-            kwargs['subscription_identifier'] = subscription.subscription_identifier
-        return self._connection.subscribe([subscription], **kwargs)
-
-    def unsubscribe(self, topic, **kwargs):
-        return self._connection.unsubscribe(topic, **kwargs)
 
     def publish(self, message_or_topic, payload=None, qos=0, retain=False, **kwargs):
         if isinstance(message_or_topic, Message):

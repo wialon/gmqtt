@@ -233,6 +233,7 @@ async def test_unsubscribe(init_clients):
     bclient.subscribe(TOPICS[2])
     bclient.subscribe(TOPICS[3])
     await asyncio.sleep(1)
+    assert len(bclient.subscriptions) == 3
 
     aclient.publish(TOPICS[1], b"topic 0 - subscribed", 1, retain=False)
     aclient.publish(TOPICS[2], b"topic 1", 1, retain=False)
@@ -242,6 +243,7 @@ async def test_unsubscribe(init_clients):
     callback2.clear()
     # Unsubscribe from one topic
     bclient.unsubscribe(TOPICS[1])
+    assert len(bclient.subscriptions) == 2
     await asyncio.sleep(3)
 
     aclient.publish(TOPICS[1], b"topic 0 - unsubscribed", 1, retain=False)
