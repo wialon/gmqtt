@@ -126,7 +126,7 @@ Connect properties are passed to `Client` object as kwargs (later they are store
 * `maximum_packet_size` - `int` The Client uses the Maximum Packet Size (in bytes) to inform the Server that it will not process packets exceeding this limit.
 
 Example:
-```
+```python
 client = gmqtt.Client("lenkaklient", receive_maximum=24000, session_expiry_interval=60, user_property=('myid', '12345'))
 ```
 
@@ -139,7 +139,7 @@ This properties will be also sent in publish packet from broker, they will be pa
 * `topic_alias` - `int` First client publishes messages with topic string and kwarg topic_alias. After this initial message client can publish message with empty string topic and same topic_alias kwarg.
 
 Example:
-```
+```python
 def on_message(client, topic, payload, qos, properties):
     # properties example here: {'content_type': ['json'], 'user_property': [('timestamp', '1524235334.881058')], 'message_expiry_interval': [60], 'subscription_identifier': [42, 64]}
     print('RECV MSG:', topic, payload, properties)
