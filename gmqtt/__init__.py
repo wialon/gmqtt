@@ -11,9 +11,9 @@ __copyright__ = ("Copyright 2013-%d, Gurtam; " % datetime.datetime.now().year,)
 
 __credits__ = [
     "Mikhail Turchunovich",
-    "Elena Nikolaichik"
+    "Elena Shylko"
 ]
-__version__ = "0.6.9"
+__version__ = "0.6.10"
 
 
 __all__ = [
