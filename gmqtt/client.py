@@ -194,8 +194,8 @@ class Client(MqttPackageHandler, SubscriptionsHandler):
                 except Exception as exc:
                     logger.error('[ERROR WHILE RESENDING] mid: %s', mid, exc_info=exc)
 
-                await asyncio.sleep(0.001)
                 await self._persistent_storage.push_message(mid, package)
+                await asyncio.sleep(0.001)
             else:
                 await asyncio.sleep(self._retry_deliver_timeout)
 
