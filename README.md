@@ -43,7 +43,7 @@ def on_subscribe(client, mid, qos, properties):
     print('SUBSCRIBED')
 
 def create_client(token):
-    client = gmqtt.Client('testing')
+    client = gmqtt.Client('client-id')
     client.on_connect = on_connect
     client.on_message = on_message
     client.on_disconnect = on_disconnect
