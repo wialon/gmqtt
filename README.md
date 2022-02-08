@@ -33,6 +33,9 @@ def on_connect(client, flags, rc, properties):
     print('Connected')
     client.subscribe('TEST/#', qos=0)
 
+    # Inject a message, now that the connection is established.
+    client.publish('TEST/TIME', str(time.time()), qos=1)
+
 def on_message(client, topic, payload, qos, properties):
     print('RECV MSG:', payload)
 
@@ -50,9 +53,6 @@ def create_client(token):
     client.on_subscribe = on_subscribe
     client.set_auth_credentials(token, None)
     return client
-
-async def publish(client):
-    client.publish('TEST/TIME', str(time.time()), qos=1)
 
 def shutdown(loop, client):
     loop.run_until_complete(client.disconnect())
@@ -74,10 +74,6 @@ if __name__ == '__main__':
     loop.add_signal_handler(signal.SIGTERM, loop.stop)
 
     t = loop.create_task(client.connect(host))
-    # Inject a message, once the connection is established.
-    def publish(fut):
-        client.publish('TEST/TIME', str(time.time()), qos=1)
-    t.add_done_callback(publish)
 
     #--
     # Add more tasks here.
