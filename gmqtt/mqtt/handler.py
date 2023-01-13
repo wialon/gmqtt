@@ -253,7 +253,7 @@ class MqttPackageHandler(EventCallback):
     def _update_keepalive_if_needed(self):
         if not self._connack_properties.get('server_keep_alive'):
             return
-        self._keepalive = self._connack_properties['server_keep_alive']
+        self._keepalive = self._connack_properties['server_keep_alive'][0]
         self._connection.keepalive = self._keepalive
 
     def _handle_connack_packet(self, cmd, packet):
