@@ -4,10 +4,8 @@ import time
 
 from .protocol import MQTTProtocol
 
-logger = logging.getLogger(__name__)
-
 class MQTTConnection(object):
-    def __init__(self, transport: asyncio.Transport, protocol: MQTTProtocol, clean_session: bool, keepalive: int):
+    def __init__(self, transport: asyncio.Transport, protocol: MQTTProtocol, clean_session: bool, keepalive: int, logger=None):
         self._transport = transport
         self._protocol = protocol
         self._protocol.set_connection(self)
@@ -21,11 +19,13 @@ class MQTTConnection(object):
 
         self._keep_connection_callback = asyncio.get_event_loop().call_later(self._keepalive / 2, self._keep_connection)
 
+        self._logger = logger or logging.getLogger(__name__)
+
     @classmethod
-    async def create_connection(cls, host, port, ssl, clean_session, keepalive, loop=None):
+    async def create_connection(cls, host, port, ssl, clean_session, keepalive, loop=None, logger=None):
         loop = loop or asyncio.get_event_loop()
         transport, protocol = await loop.create_connection(MQTTProtocol, host, port, ssl=ssl)
-        return MQTTConnection(transport, protocol, clean_session, keepalive)
+        return MQTTConnection(transport, protocol, clean_session, keepalive, logger=logger)
 
     def _keep_connection(self):
         if self.is_closing() or not self._keepalive:
@@ -33,7 +33,7 @@ class MQTTConnection(object):
 
         time_ = time.monotonic()
         if time_ - self._last_data_in >= 2 * self._keepalive:
-            logger.warning("[LOST HEARTBEAT FOR %s SECONDS, GOING TO CLOSE CONNECTION]", 2 * self._keepalive)
+            self._logger.warning("[LOST HEARTBEAT FOR %s SECONDS, GOING TO CLOSE CONNECTION]", 2 * self._keepalive)
             asyncio.ensure_future(self.close())
             return
 
