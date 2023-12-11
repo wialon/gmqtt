@@ -12,8 +12,6 @@ from .mqtt.constants import MQTTv50, UNLIMITED_RECONNECTS
 
 from .storage import HeapPersistentStorage
 
-logger = logging.getLogger(__name__)
-
 
 class Message:
     def __init__(self, topic, payload, qos=0, retain=False, **kwargs):
@@ -126,8 +124,8 @@ class SubscriptionsHandler:
 
 class Client(MqttPackageHandler, SubscriptionsHandler):
     def __init__(self, client_id, clean_session=True, optimistic_acknowledgement=True,
-                 will_message=None, **kwargs):
-        super(Client, self).__init__(optimistic_acknowledgement=optimistic_acknowledgement)
+                 will_message=None, logger=None, **kwargs):
+        super(Client, self).__init__(optimistic_acknowledgement=optimistic_acknowledgement, logger=logger)
         self._client_id = client_id or uuid.uuid4().hex
 
         # in MQTT 5.0 this is clean start flag
@@ -156,6 +154,8 @@ class Client(MqttPackageHandler, SubscriptionsHandler):
 
         self._resend_task = asyncio.ensure_future(self._resend_qos_messages())
 
+        self._logger = logger or logging.getLogger(__name__)
+
     def get_subscription_by_identifier(self, subscription_identifier):
         return next((sub for sub in self.subscriptions if sub.subscription_identifier == subscription_identifier), None)
 
@@ -163,7 +163,7 @@ class Client(MqttPackageHandler, SubscriptionsHandler):
         return [sub for sub in self.subscriptions if sub.mid == mid]
 
     def _remove_message_from_query(self, mid):
-        logger.debug('[REMOVE MESSAGE] %s', mid)
+        self._logger.debug('[REMOVE MESSAGE] %s', mid)
         asyncio.ensure_future(
             self._persistent_storage.remove_message_by_mid(mid)
         )
@@ -177,13 +177,13 @@ class Client(MqttPackageHandler, SubscriptionsHandler):
         await self._connected.wait()
 
         if await self._persistent_storage.is_empty:
-            logger.debug('[QoS query IS EMPTY]')
+            self._logger.debug('[QoS query IS EMPTY]')
             await asyncio.sleep(self._retry_deliver_timeout)
         elif self._connection.is_closing():
-            logger.debug('[Some msg need to resend] Transport is closing, sleeping')
+            self._logger.debug('[Some msg need to resend] Transport is closing, sleeping')
             await asyncio.sleep(self._retry_deliver_timeout)
         else:
-            logger.debug('[Some msg need to resend] processing message')
+            self._logger.debug('[Some msg need to resend] processing message')
             msg = await self._persistent_storage.pop_message()
 
             if msg:
@@ -192,7 +192,7 @@ class Client(MqttPackageHandler, SubscriptionsHandler):
                 try:
                     self._connection.send_package(package)
                 except Exception as exc:
-                    logger.error('[ERROR WHILE RESENDING] mid: %s', mid, exc_info=exc)
+                    self._logger.error('[ERROR WHILE RESENDING] mid: %s', mid, exc_info=exc)
 
                 await self._persistent_storage.push_message(mid, package)
                 await asyncio.sleep(0.001)
@@ -238,7 +238,7 @@ class Client(MqttPackageHandler, SubscriptionsHandler):
         # important for reconnects, make sure u know what u are doing if wanna change :(
         self._exit_reconnecting_state()
         self._clear_topics_aliases()
-        connection = await MQTTConnection.create_connection(host, port, ssl, clean_session, keepalive)
+        connection = await MQTTConnection.create_connection(host, port, ssl, clean_session, keepalive, logger=self._logger)
         connection.set_handler(self)
         return connection
 
@@ -249,7 +249,7 @@ class Client(MqttPackageHandler, SubscriptionsHandler):
             return True
         if self.failed_connections <= self._config['reconnect_retries']:
             return True
-        logger.error('[DISCONNECTED] max number of failed connection attempts achieved')
+        self._logger.error('[DISCONNECTED] max number of failed connection attempts achieved')
         return False
 
     async def reconnect(self, delay=False):
@@ -260,7 +260,7 @@ class Client(MqttPackageHandler, SubscriptionsHandler):
         try:
             await self._disconnect()
         except:
-            logger.info('[RECONNECT] ignored error while disconnecting, trying to reconnect anyway')
+            self._logger.info('[RECONNECT] ignored error while disconnecting, trying to reconnect anyway')
         if delay:
             await asyncio.sleep(self._config['reconnect_delay'])
         try:
@@ -268,7 +268,7 @@ class Client(MqttPackageHandler, SubscriptionsHandler):
                                                              clean_session=False, keepalive=self._keepalive)
         except OSError as exc:
             self.failed_connections += 1
-            logger.warning("[CAN'T RECONNECT] %s", self.failed_connections)
+            self._logger.warning("[CAN'T RECONNECT] %s", self.failed_connections)
             asyncio.ensure_future(self.reconnect(delay=True))
             return
         await self._connection.auth(self._client_id, self._username, self._password,
