@@ -89,7 +89,7 @@ class MQTTConnection(object):
         if self._keep_connection_callback:
             self._keep_connection_callback.cancel()
         self._transport.close()
-        await self._protocol.closed
+        await asyncio.wait_for(self._protocol.closed, 1)
 
     def is_closing(self):
         return self._transport.is_closing()
