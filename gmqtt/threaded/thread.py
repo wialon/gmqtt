@@ -37,33 +37,33 @@ class MQTTThread(Thread):
     def on_connect(self, client, flags, rc, properties):
         logger.info("MQTT CONNECTED")
         self._push_queue(PopType.CONNECT, [], {
-            flags: flags,
-            rc: rc,
-            properties: properties
+            "flags": flags,
+            "rc": rc,
+            "properties": properties
         })
 
 
     def on_message(self, client, topic, payload, qos, properties):
         self._push_queue(PopType.MESSAGE, [], {
-            topic: topic,
-            payload: payload,
-            qos: qos,
-            properties: properties
+            "topic": topic,
+            "payload": payload,
+            "qos": qos,
+            "properties": properties
         })
 
     def on_disconnect(self, client, packet, exc=None):
         logger.info("MQTT DISCONNECTED")
         self._push_queue(PopType.DISCONNECT, [], {
-            packet: packet,
-            exc: exc
+            "packet": packet,
+            "exc": exc
         })
 
 
     def on_subscribe(self, client, mid, qos, properties):
         self._push_queue(PopType.SUBSCRIBE, [], {
-            mid: mid,
-            qos: qos,
-            properties: properties
+            "mid": mid,
+            "qos": qos,
+            "properties": properties
         })
 
     async def _auto_push(self):
