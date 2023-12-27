@@ -67,15 +67,15 @@ class ThreadedClient(EventCallback):
                     pop_type, args, kwargs = self.pop_queue.get_nowait()
 
                     if pop_type == PopType.MESSAGE:
-                        self.on_message(None, *args, **kwargs)
+                        self.on_message(self.thread.client, *args, **kwargs)
                     elif pop_type == PopType.CONNECT:
                         self._is_connected = True
-                        self.on_connect(None, *args, **kwargs)
+                        self.on_connect(self.thread.client, *args, **kwargs)
                     elif pop_type == PopType.SUBSCRIBE:
-                        self.on_subscribe(None, *args, **kwargs)
+                        self.on_subscribe(self.thread.client, *args, **kwargs)
                     elif pop_type == PopType.DISCONNECT:
                         self._is_connected = False
-                        self.on_disconnect(None, *args, **kwargs)
+                        self.on_disconnect(self.thread.client, *args, **kwargs)
                 else:
                     await asyncio.sleep(0.001)
 

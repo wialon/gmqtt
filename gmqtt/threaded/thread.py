@@ -26,15 +26,6 @@ class MQTTThread(Thread):
     def publish(self, *args, **kwargs):
         self.client.publish(*args, **kwargs)
 
-    def subscribe(self, *args, **kwargs):
-        self.client.subscribe(*args, **kwargs)
-
-    def set_auth_credentials(self, *args, **kwargs):
-        self.client.set_auth_credentials(*args, **kwargs)
-
-    def connect(self, *args, **kwargs):
-        asyncio.ensure_future(self.client.connect(*args, **kwargs))
-
     def _push_queue(self, msg_type, args, kwargs):
         try:
             self.pop_queue.put((msg_type, args[1:], kwargs))
@@ -43,21 +34,37 @@ class MQTTThread(Thread):
         except EOFError:
             pass
 
-    def on_connect(self, *args, **kwargs):
+    def on_connect(self, client, flags, rc, properties):
         logger.info("MQTT CONNECTED")
-        self._push_queue(PopType.CONNECT, args[1:], kwargs)
+        self._push_queue(PopType.CONNECT, [], {
+            flags: flags,
+            rc: rc,
+            properties: properties
+        })
 
 
-    def on_message(self, *args, **kwargs):
-        self._push_queue(PopType.MESSAGE, args[1:], kwargs)
+    def on_message(self, client, topic, payload, qos, properties):
+        self._push_queue(PopType.MESSAGE, [], {
+            topic: topic,
+            payload: payload,
+            qos: qos,
+            properties: properties
+        })
 
-    def on_disconnect(self, *args, **kwargs):
+    def on_disconnect(self, client, packet, exc=None):
         logger.info("MQTT DISCONNECTED")
-        self._push_queue(PopType.DISCONNECT, args[1:], kwargs)
+        self._push_queue(PopType.DISCONNECT, [], {
+            packet: packet,
+            exc: exc
+        })
 
 
-    def on_subscribe(self, *args, **kwargs):
-        self._push_queue(PopType.SUBSCRIBE, args[1:], kwargs)
+    def on_subscribe(self, client, mid, qos, properties):
+        self._push_queue(PopType.SUBSCRIBE, [], {
+            mid: mid,
+            qos: qos,
+            properties: properties
+        })
 
     async def _auto_push(self):
         while not self._stop_event.is_set():
