@@ -224,6 +224,7 @@ class Client(MqttPackageHandler, SubscriptionsHandler):
 
         MQTTProtocol.proto_ver = version
 
+        self._error = None
         self._connection = await self._create_connection(
             host, port=self._port, ssl=self._ssl, clean_session=self._clean_session, keepalive=keepalive)
 
