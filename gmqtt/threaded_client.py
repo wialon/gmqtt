@@ -55,10 +55,10 @@ class ThreadedClient(EventCallback):
         self._push_message(PushType.PUBLISH, args, kwargs)
 
     def subscribe(self, *args, **kwargs):
-        return asyncio.run_coroutine_threadsafe(self.thread.client.subscribe(*args, **kwargs), self.thread.loop).result()
+        return self.thread.client.subscribe(*args, **kwargs)
 
     def set_auth_credentials(self, username, password):
-        self.thread.client.set_auth_credentials(username, password)
+        return self.thread.client.set_auth_credentials(username, password)
 
     async def _auto_pop(self):
         while not self._stop_event.is_set():
