@@ -1,6 +1,7 @@
 import datetime
 
 from .client import Client, Message, Subscription
+from .threaded_client import ThreadedClient
 from .mqtt import constants
 from .mqtt.protocol import BaseMQTTProtocol
 from .mqtt.handler import MQTTConnectError
