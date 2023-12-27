@@ -141,6 +141,8 @@ class Client(MqttPackageHandler, SubscriptionsHandler):
         self._port = None
         self._ssl = None
 
+        self._check_connection_task = None
+
         self._connect_properties = kwargs
         self._connack_properties = {}
 
@@ -231,7 +233,9 @@ class Client(MqttPackageHandler, SubscriptionsHandler):
 
         await self._persistent_storage.wait_empty()
 
-        asyncio.ensure_future(self._check_connection_state())
+        if self._check_connection_task is not None:
+            self._check_connection_task.cancel()
+        self._check_connection_task = asyncio.ensure_future(self._check_connection_state())
 
         if raise_exc and self._error:
             raise self._error
