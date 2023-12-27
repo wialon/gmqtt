@@ -231,8 +231,18 @@ class Client(MqttPackageHandler, SubscriptionsHandler):
 
         await self._persistent_storage.wait_empty()
 
+        asyncio.ensure_future(self._check_connection_state())
+
         if raise_exc and self._error:
             raise self._error
+
+    def _check_connection_state(self):
+        while self._is_active:
+            if self._connection.is_closing() and self._allow_reconnect():
+                self._logger.warning("CONNECTION HAS DROPPED - RECONNECTING")
+                asyncio.ensure_future(self.reconnect())
+                await asyncio.sleep(60)
+
 
     async def _create_connection(self, host, port, ssl, clean_session, keepalive):
         # important for reconnects, make sure u know what u are doing if wanna change :(
