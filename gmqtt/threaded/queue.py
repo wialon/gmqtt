@@ -23,4 +23,4 @@ class SizeLimitedQueue(queue.Queue):
 
             logging.warning("DROPPED {} MESSAGES", qsize - self.qsize())
 
-        return self.get_nowait()
+        return super().get_nowait()
