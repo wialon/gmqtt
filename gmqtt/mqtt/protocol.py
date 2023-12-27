@@ -72,6 +72,8 @@ class BaseMQTTProtocol(_StreamReaderProtocolCompatibilityMixin, asyncio.StreamRe
             self._transport.write(data)
         else:
             logger.warning('[TRYING WRITE TO CLOSED SOCKET]')
+            if self._connected.is_set():
+                self.connection_lost(BrokenPipeError)
 
     def connection_lost(self, exc):
         self._connected.clear()
