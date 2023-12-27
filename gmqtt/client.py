@@ -243,7 +243,7 @@ class Client(MqttPackageHandler, SubscriptionsHandler):
     async def _check_connection_state(self):
         while self._is_active:
             try:
-                if self._connection.is_closing() and self._allow_reconnect():
+                if not self.is_connected and self._allow_reconnect():
                     self._logger.warning("CONNECTION HAS DROPPED - RECONNECTING")
                     asyncio.ensure_future(self.reconnect())
             except Exception:
