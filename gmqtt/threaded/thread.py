@@ -21,7 +21,7 @@ class MQTTThread(Thread):
         self.loop = asyncio.new_event_loop()
         self.client = None
 
-        self._stop_event = asyncio.Event()
+        self._stop_event = asyncio.Event(loop=self.loop)
 
     def publish(self, *args, **kwargs):
         self.client.publish(*args, **kwargs)
