@@ -166,7 +166,7 @@ class Client(MqttPackageHandler, SubscriptionsHandler):
 
     def _remove_message_from_query(self, mid):
         self._logger.debug('[REMOVE MESSAGE] %s', mid)
-        asyncio.ensure_future(
+        self._remove_message_task = asyncio.ensure_future(
             self._persistent_storage.remove_message_by_mid(mid)
         )
 
@@ -246,7 +246,7 @@ class Client(MqttPackageHandler, SubscriptionsHandler):
             try:
                 if not self.is_connected and self._allow_reconnect():
                     self._logger.warning("CONNECTION HAS DROPPED - RECONNECTING")
-                    asyncio.ensure_future(self.reconnect())
+                    self._reconnect_task = asyncio.ensure_future(self.reconnect())
             except Exception:
                 pass
 
@@ -288,7 +288,7 @@ class Client(MqttPackageHandler, SubscriptionsHandler):
         except OSError as exc:
             self.failed_connections += 1
             self._logger.warning("[CAN'T RECONNECT] %s", self.failed_connections)
-            asyncio.ensure_future(self.reconnect(delay=True))
+            self._reconnect_task = asyncio.ensure_future(self.reconnect(delay=True))
             return
         await self._connection.auth(self._client_id, self._username, self._password,
                                     will_message=self._will_message, **self._connect_properties)

@@ -266,12 +266,12 @@ class MqttPackageHandler(EventCallback):
             if result == 1 and self.protocol_version == MQTTv50:
                 self._logger.info('[CONNACK] Downgrading to MQTT 3.1 protocol version')
                 MQTTProtocol.proto_ver = MQTTv311
-                future = asyncio.ensure_future(self.reconnect(delay=True))
-                future.add_done_callback(self._handle_exception_in_future)
+                self._reconnect_task = asyncio.ensure_future(self.reconnect(delay=True))
+                self._reconnect_task.add_done_callback(self._handle_exception_in_future)
                 return
             else:
                 self._error = MQTTConnectError(result)
-                asyncio.ensure_future(self.reconnect(delay=True))
+                self._reconnect_task = asyncio.ensure_future(self.reconnect(delay=True))
                 return
         else:
             self.failed_connections = 0
@@ -280,7 +280,7 @@ class MqttPackageHandler(EventCallback):
             properties, _ = self._parse_properties(packet[2:])
             if properties is None:
                 self._error = MQTTConnectError(10)
-                asyncio.ensure_future(self.disconnect())
+                self._disconnect_task = asyncio.ensure_future(self.disconnect())
             self._connack_properties = properties
             self._update_keepalive_if_needed()
 

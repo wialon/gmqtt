@@ -30,7 +30,7 @@ class ThreadedClient(EventCallback):
     def _serve(self):
         self.thread.start()
         asyncio.run_coroutine_threadsafe(self.thread.init(), self.thread.loop).result()
-        asyncio.ensure_future(self._auto_pop())
+        self._pop_task = asyncio.ensure_future(self._auto_pop())
 
     def __del__(self):
         self.shutdown()

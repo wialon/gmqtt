@@ -34,7 +34,7 @@ class MQTTConnection(object):
         time_ = time.monotonic()
         if time_ - self._last_data_in >= 2 * self._keepalive:
             self._logger.warning("[LOST HEARTBEAT FOR %s SECONDS, GOING TO CLOSE CONNECTION]", 2 * self._keepalive)
-            asyncio.ensure_future(self.close())
+            self._close_task = asyncio.ensure_future(self.close())
             return
 
         if time_ - self._last_data_out >= 0.8 * self._keepalive or \
