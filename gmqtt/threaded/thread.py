@@ -88,7 +88,6 @@ class MQTTThread(Thread):
     def shutdown(self):
         self._stop_event.set()
 
-
     async def _serve(self):
         publish_task = asyncio.ensure_future(self._auto_push())
 
