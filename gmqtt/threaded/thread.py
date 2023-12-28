@@ -21,7 +21,7 @@ class MQTTThread(Thread):
         self.loop = asyncio.new_event_loop()
         self.client = None
 
-        self._stop_event = asyncio.Event(loop=self.loop)
+        self._stop_event = None
 
     def publish(self, *args, **kwargs):
         self.client.publish(*args, **kwargs)
@@ -67,7 +67,7 @@ class MQTTThread(Thread):
         })
 
     async def _auto_push(self):
-        while not self._stop_event.is_set():
+        while self._stop_event is None or not self._stop_event.is_set():
             try:
                 if self.push_queue.qsize() > 0:
                     push_type, args, kwargs = self.push_queue.get_nowait()
@@ -106,4 +106,5 @@ class MQTTThread(Thread):
 
     def _start_thread(self):
         asyncio.set_event_loop(self.loop)
+        self._stop_event = asyncio.Event()
         self.loop.run_until_complete(self._serve())

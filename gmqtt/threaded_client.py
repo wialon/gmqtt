@@ -24,7 +24,7 @@ class ThreadedClient(EventCallback):
         self.loop = asyncio.get_event_loop()
         self.thread = MQTTThread(client_id, self.push_queue, self.pop_queue)
 
-        self._stop_event = asyncio.Event(loop=self.loop)
+        self._stop_event = asyncio.Event()
         self._serve()
 
     def _serve(self):
