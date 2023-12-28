@@ -19,6 +19,7 @@ __version__ = "0.6.13"
 
 __all__ = [
     'Client',
+    'ThreadedClient',
     'Message',
     'Subscription',
     'BaseMQTTProtocol',
