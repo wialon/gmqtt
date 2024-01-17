@@ -17,7 +17,7 @@ class ThreadedClient(EventCallback):
         self.push_queue = SizeLimitedQueue()
         self.pop_queue = SizeLimitedQueue()
 
-        self._is_connected = False
+        #self._is_connected = False
 
         self.client_id = client_id
 
@@ -37,7 +37,7 @@ class ThreadedClient(EventCallback):
 
     @property
     def is_connected(self):
-        return self._is_connected
+        return self.thread.client.is_connected if not self.thread.client is None else False
 
     def _push_message(self, msg_type, args, kwargs):
         try:
@@ -69,12 +69,12 @@ class ThreadedClient(EventCallback):
                     if pop_type == PopType.MESSAGE:
                         self.on_message(self.thread.client, *args, **kwargs)
                     elif pop_type == PopType.CONNECT:
-                        self._is_connected = True
+                        #self._is_connected = True
                         self.on_connect(self.thread.client, *args, **kwargs)
                     elif pop_type == PopType.SUBSCRIBE:
                         self.on_subscribe(self.thread.client, *args, **kwargs)
                     elif pop_type == PopType.DISCONNECT:
-                        self._is_connected = False
+                        #self._is_connected = False
                         self.on_disconnect(self.thread.client, *args, **kwargs)
                 else:
                     await asyncio.sleep(0.001)
