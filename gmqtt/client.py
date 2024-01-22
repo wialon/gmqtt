@@ -15,7 +15,7 @@ from .storage import HeapPersistentStorage
 
 class Message:
     def __init__(self, topic, payload, qos=0, retain=False, **kwargs):
-        self.topic = topic.encode('utf-8', errors='replace') if isinstance(topic, str) else str
+        self.topic = topic.encode('utf-8', errors='replace') if isinstance(topic, str) else topic
         self.qos = qos
         self.retain = retain
         self.dup = False

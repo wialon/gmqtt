@@ -3,7 +3,7 @@
 .idea
 gmqtt.egg-info
 dist/
-
+build/
 # virtualenvs
 env/
 venv/
