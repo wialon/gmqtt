@@ -283,6 +283,7 @@ class Client(MqttPackageHandler, SubscriptionsHandler):
         if delay:
             await asyncio.sleep(self._config['reconnect_delay'])
         try:
+            self._connection.set_handler(None) # clear previous connection
             self._connection = await self._create_connection(self._host, self._port, ssl=self._ssl,
                                                              clean_session=False, keepalive=self._keepalive)
         except OSError as exc:
