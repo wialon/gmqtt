@@ -36,10 +36,6 @@ class ThreadedClient(EventCallback):
         self.shutdown()
 
     @property
-    def failed_connections(self):
-        return self.thread.client.failed_connections if not self.thread is None else 0
-
-    @property
     def is_connected(self):
         return self.thread.client.is_connected if not self.thread.client is None else False
 
