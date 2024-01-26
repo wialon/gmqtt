@@ -43,8 +43,11 @@ class MQTTConnection(object):
         self._keep_connection_callback = asyncio.get_event_loop().call_later(self._keepalive / 2, self._keep_connection)
 
     def put_package(self, pkg):
-        self._last_data_in = time.monotonic()
-        self._handler(*pkg)
+        if self._handler is not None:
+            self._last_data_in = time.monotonic()
+            self._handler(*pkg)
+        else:
+            self._logger.warning("[NO PACKAGE HANDLER]")
 
     def send_package(self, package):
         # This is not blocking operation, because transport place the data
