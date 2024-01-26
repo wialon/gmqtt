@@ -36,6 +36,10 @@ class ThreadedClient(EventCallback):
         self.shutdown()
 
     @property
+    def failed_connections(self):
+        return self.thread.client.failed_connections if not self.thread is None else 0
+
+    @property
     def is_connected(self):
         return self.thread.client.is_connected if not self.thread.client is None else False
 
@@ -54,11 +58,18 @@ class ThreadedClient(EventCallback):
     def publish(self,*args, **kwargs):
         self._push_message(PushType.PUBLISH, args, kwargs)
 
-    def subscribe(self, *args, **kwargs):
+    async def _subscribe_async(self, *args, **kwargs):
         return self.thread.client.subscribe(*args, **kwargs)
+    def subscribe(self, *args, **kwargs):
+        fut = asyncio.run_coroutine_threadsafe(self._subscribe_async(*args, **kwargs), self.thread.loop)
+        return fut.result()
+
+    async def _set_auth_credentials_async(self, username, password):
+        return self.thread.client.set_auth_credentials(username, password)
 
     def set_auth_credentials(self, username, password):
-        return self.thread.client.set_auth_credentials(username, password)
+        fut = asyncio.run_coroutine_threadsafe(self._set_auth_credentials_async(username, password), self.thread.loop)
+        return fut.result()
 
     async def _auto_pop(self):
         while not self._stop_event.is_set():
