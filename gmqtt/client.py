@@ -273,6 +273,8 @@ class Client(MqttPackageHandler, SubscriptionsHandler):
             return
         await self._connection.auth(self._client_id, self._username, self._password,
                                     will_message=self._will_message, **self._connect_properties)
+        if self.subscriptions:
+            self._connection.subscribe(self.subscriptions)
 
     async def disconnect(self, reason_code=0, **properties):
         self._is_active = False
