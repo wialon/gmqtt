@@ -430,7 +430,7 @@ class MqttPackageHandler(EventCallback):
 
         # TODO: For MQTT 5.0 parse reason code and properties
 
-        self._logger.info('[RECEIVED PUBACK FOR] %s', mid)
+        self._logger.debug('[RECEIVED PUBACK FOR] %s', mid)
 
         self._id_generator.free_id(mid)
         self._remove_message_from_query(mid)
@@ -440,14 +440,14 @@ class MqttPackageHandler(EventCallback):
 
     def _handle_pubrec_packet(self, cmd, packet):
         (mid,) = struct.unpack("!H", packet[:2])
-        self._logger.info('[RECEIVED PUBREC FOR] %s', mid)
+        self._logger.debug('[RECEIVED PUBREC FOR] %s', mid)
         self._id_generator.free_id(mid)
         self._remove_message_from_query(mid)
         self._send_pubrel(mid, 0)
 
     def _handle_pubrel_packet(self, cmd, packet):
         (mid, ) = struct.unpack("!H", packet[:2])
-        self._logger.info('[RECEIVED PUBREL FOR] %s', mid)
+        self._logger.debug('[RECEIVED PUBREL FOR] %s', mid)
         self._send_pubcomp(mid, 0)
 
         self._id_generator.free_id(mid)
