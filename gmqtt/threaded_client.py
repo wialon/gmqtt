@@ -2,11 +2,10 @@ import asyncio
 import logging
 import traceback
 
-from gmqtt.mqtt.constants import MQTTv50
 from gmqtt.mqtt.handler import EventCallback
 from gmqtt.threaded.queue import SizeLimitedQueue
 from gmqtt.threaded.thread import MQTTThread
-from gmqtt.threaded.utils import PushType, PopType, MAX_QUEUE_SIZE
+from gmqtt.threaded.utils import PushType, PopType
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +28,10 @@ class ThreadedClient(EventCallback):
 
     def _serve(self):
         self.thread.start()
-        asyncio.run_coroutine_threadsafe(self.thread.init(), self.thread.loop).result()
+
+        with self.thread.start_up_lock.acquire(): # wait until thread has initialized
+            asyncio.run_coroutine_threadsafe(self.thread.init(), self.thread.loop).result()
+
         self._pop_task = asyncio.ensure_future(self._auto_pop())
 
     def __del__(self):
@@ -38,6 +40,10 @@ class ThreadedClient(EventCallback):
     @property
     def failed_connections(self):
         return self.thread.client.failed_connections if not self.thread is None else 0
+
+    @property
+    def connection_attempts(self):
+        return self.thread.client.connection_attempts if not self.thread is None else 0
 
     @failed_connections.setter
     def failed_connections(self, v):

@@ -141,6 +141,8 @@ class Client(MqttPackageHandler, SubscriptionsHandler):
         self._port = None
         self._ssl = None
 
+        self._connection_attempts = 0
+
         self._check_connection_task = None
 
         self._connect_properties = kwargs
@@ -157,6 +159,10 @@ class Client(MqttPackageHandler, SubscriptionsHandler):
         self._resend_task = asyncio.ensure_future(self._resend_qos_messages())
 
         self._logger = logger or logging.getLogger(__name__)
+
+    @property
+    def connection_attempts(self):
+        return self._connection_attempts
 
     def get_subscription_by_identifier(self, subscription_identifier):
         return next((sub for sub in self.subscriptions if sub.subscription_identifier == subscription_identifier), None)
@@ -255,6 +261,8 @@ class Client(MqttPackageHandler, SubscriptionsHandler):
 
     async def _create_connection(self, host, port, ssl, clean_session, keepalive):
         # important for reconnects, make sure u know what u are doing if wanna change :(
+        self._connection_attempts += 1
+
         self._exit_reconnecting_state()
         self._clear_topics_aliases()
         connection = await MQTTConnection.create_connection(host, port, ssl, clean_session, keepalive, logger=self._logger)

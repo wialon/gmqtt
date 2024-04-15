@@ -1,9 +1,9 @@
 import asyncio
 import logging
+import threading
 import traceback
 from threading import Thread
 
-from gmqtt import Client
 from gmqtt.threaded.utils import MAX_QUEUE_SIZE, PopType, PushType
 
 logger = logging.getLogger(__name__)
@@ -18,8 +18,11 @@ class MQTTThread(Thread):
 
         self.client_id = client_id
 
-        self.loop = asyncio.new_event_loop()
+        self.loop = None
         self.client = None
+
+        self.start_up_lock = threading.Lock()
+        self.start_up_lock.acquire()
 
         self._stop_event = None
 
@@ -94,6 +97,7 @@ class MQTTThread(Thread):
         await self._stop_event.wait()
 
     async def init(self):
+        from gmqtt import Client
         self.client = Client(self.client_id)
 
         self.client.on_message = self.on_message
@@ -104,6 +108,9 @@ class MQTTThread(Thread):
         return self.client
 
     def _start_thread(self):
+        self.loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self.loop)
         self._stop_event = asyncio.Event()
+
+        self.start_up_lock.release()
         self.loop.run_until_complete(self._serve())
