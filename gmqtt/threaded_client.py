@@ -29,8 +29,8 @@ class ThreadedClient(EventCallback):
     def _serve(self):
         self.thread.start()
 
-        with self.thread.start_up_lock.acquire(): # wait until thread has initialized
-            asyncio.run_coroutine_threadsafe(self.thread.init(), self.thread.loop).result()
+        self.thread.start_up_lock.acquire() # wait until thread has initialized
+        asyncio.run_coroutine_threadsafe(self.thread.init(), self.thread.loop).result()
 
         self._pop_task = asyncio.ensure_future(self._auto_pop())
 
