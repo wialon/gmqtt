@@ -13,3 +13,4 @@ pyenv/
 .coverage
 .pytest_cache/
 htmlcov/
+.DS_Store
