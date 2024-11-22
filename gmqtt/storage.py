@@ -26,11 +26,16 @@ class BasePersistentStorage(object):
         # this method must implement an atomic transaction from async network exchange perspective.
         raise NotImplementedError
 
+    async def clear(self):
+        raise NotImplementedError
+
+    async def get_all(self):
+        raise NotImplementedError
+
 
 class HeapPersistentStorage(BasePersistentStorage):
-    def __init__(self, timeout):
+    def __init__(self):
         self._queue = []
-        self._timeout = timeout
         self._empty_waiters: Set[asyncio.Future] = set()
 
     def _notify_waiters(self, waiters: Set[asyncio.Future], notify: Callable[[asyncio.Future], None]) -> None:
@@ -46,17 +51,10 @@ class HeapPersistentStorage(BasePersistentStorage):
         heapq.heappush(self._queue, (tm, mid, raw_package))
 
     async def pop_message(self):
-        current_time = asyncio.get_event_loop().time()
-
         (tm, mid, raw_package) = heapq.heappop(self._queue)
 
-        if current_time - tm > self._timeout:
-            self._check_empty()
-            return mid, raw_package
-        else:
-            heapq.heappush(self._queue, (tm, mid, raw_package))
-
-        return None
+        self._check_empty()
+        return mid, raw_package
 
     async def remove_message_by_mid(self, mid):
         message = next(filter(lambda x: x[1] == mid, self._queue), None)
@@ -74,3 +72,10 @@ class HeapPersistentStorage(BasePersistentStorage):
             waiter = asyncio.get_running_loop().create_future()
             self._empty_waiters.add(waiter)
             await waiter
+
+    async def clear(self):
+        self._queue = []
+        self._notify_waiters(self._empty_waiters, lambda waiter: waiter.set_result(None))
+
+    async def get_all(self):
+        return self._queue

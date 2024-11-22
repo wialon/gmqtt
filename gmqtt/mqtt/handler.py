@@ -258,7 +258,11 @@ class MqttPackageHandler(EventCallback):
     def _handle_connack_packet(self, cmd, packet):
         self._connected.set()
 
-        (flags, result) = struct.unpack("!BB", packet[:2])
+        (session_present, result) = struct.unpack("!BB", packet[:2])
+        if session_present:
+            asyncio.ensure_future(self._resend_qos_messages())
+        else:
+            asyncio.ensure_future(self._clear_resend_qos_queue())
 
         if result != 0:
             self._logger.warning('[CONNACK] %s', hex(result))
@@ -287,8 +291,8 @@ class MqttPackageHandler(EventCallback):
         # TODO: Implement checking for the flags and results
         # see 3.2.2.3 Connect Return code of the http://docs.oasis-open.org/mqtt/mqtt/v3.1.1/os/mqtt-v3.1.1-os.pdf
 
-        self._logger.debug('[CONNACK] flags: %s, result: %s', hex(flags), hex(result))
-        self.on_connect(self, flags, result, self.properties)
+        self._logger.debug('[CONNACK] session_present: %s, result: %s', hex(session_present), hex(result))
+        self.on_connect(self, session_present, result, self.properties)
 
     def _handle_publish_packet(self, cmd, raw_packet):
         header = cmd

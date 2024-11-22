@@ -3,6 +3,7 @@ import json
 
 import logging
 import uuid
+from copy import copy
 from typing import Union, Sequence
 
 from .mqtt.protocol import MQTTProtocol
@@ -147,12 +148,9 @@ class Client(MqttPackageHandler, SubscriptionsHandler):
         self._will_message = will_message
 
         # TODO: this constant may be moved to config
-        self._retry_deliver_timeout = kwargs.pop('retry_deliver_timeout', 5)
-        self._persistent_storage = kwargs.pop('persistent_storage', HeapPersistentStorage(self._retry_deliver_timeout))
+        self._persistent_storage = kwargs.pop('persistent_storage', HeapPersistentStorage())
 
         self._topic_alias_maximum = kwargs.get('topic_alias_maximum', 0)
-
-        self._resend_task = asyncio.ensure_future(self._resend_qos_messages())
 
         self._logger = logger or logging.getLogger(__name__)
 
@@ -178,16 +176,18 @@ class Client(MqttPackageHandler, SubscriptionsHandler):
 
         if await self._persistent_storage.is_empty:
             self._logger.debug('[QoS query IS EMPTY]')
-            await asyncio.sleep(self._retry_deliver_timeout)
+            return
         elif self._connection.is_closing():
-            self._logger.debug('[Some msg need to resend] Transport is closing, sleeping')
-            await asyncio.sleep(self._retry_deliver_timeout)
+            self._logger.debug('[Some msg need to resend] Transport is closing')
+            return
         else:
-            self._logger.debug('[Some msg need to resend] processing message')
-            msg = await self._persistent_storage.pop_message()
+            msgs = copy(await self._persistent_storage.get_all())
+            self._logger.debug('[msgs need to resend] processing %s messages', len(msgs))
 
-            if msg:
-                (mid, package) = msg
+            await self._persistent_storage.clear()
+
+            for msg in msgs:
+                (_, mid, package) = msg
 
                 try:
                     self._connection.send_package(package)
@@ -195,11 +195,10 @@ class Client(MqttPackageHandler, SubscriptionsHandler):
                     self._logger.error('[ERROR WHILE RESENDING] mid: %s', mid, exc_info=exc)
 
                 await self._persistent_storage.push_message(mid, package)
-                await asyncio.sleep(0.001)
-            else:
-                await asyncio.sleep(self._retry_deliver_timeout)
 
-        self._resend_task = asyncio.ensure_future(self._resend_qos_messages())
+    async def _clear_resend_qos_queue(self):
+        await self._persistent_storage.clear()
+
 
     @property
     def properties(self):
@@ -276,7 +275,6 @@ class Client(MqttPackageHandler, SubscriptionsHandler):
 
     async def disconnect(self, reason_code=0, **properties):
         self._is_active = False
-        self._resend_task.cancel()
         await self._disconnect(reason_code=reason_code, **properties)
 
     async def _disconnect(self, reason_code=0, **properties):
