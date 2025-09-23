@@ -62,6 +62,9 @@ class ThreadedClient(EventCallback):
             pass
 
     async def connect(self, *args, **kwargs):
+        if self.loop != asyncio.get_running_loop():
+            raise RuntimeError("connect() must be called from the same thread as the event loop")
+
         fut = asyncio.run_coroutine_threadsafe(self.thread.client.connect(*args, **kwargs), self.thread.loop)
         await asyncio.wrap_future(fut)
 
