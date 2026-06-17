@@ -294,10 +294,12 @@ class Client(SubscriptionsHandlerMixin):
         self._persistent_storage.clear()
 
     def set_auth_credentials(self, username, password=None):
-        self._username = username.encode()
+        if isinstance(username, str):
+            username = username.encode()
+        if isinstance(password, str):
+            password = password.encode()
+        self._username = username
         self._password = password
-        if isinstance(self._password, str):
-            self._password = password.encode()
 
     async def connect(
         self, host, port=1883, ssl=False, keepalive=60, version=MQTTv50, raise_exc=True
