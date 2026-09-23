@@ -28,7 +28,11 @@ class PersistentStorage:
 
     def _notify_waiters(self, notify: Callable[[asyncio.Future], None]) -> None:
         while self._empty_waiters:
-            notify(self._empty_waiters.pop())
+            waiter = self._empty_waiters.pop()
+            # Cancelled waiters are already done; set_result would raise
+            # InvalidStateError and strand the rest.
+            if not waiter.done():
+                notify(waiter)
 
     def _check_empty(self):
         if not self._messages:
@@ -46,10 +50,17 @@ class PersistentStorage:
         return not self._messages
 
     async def wait_empty(self) -> None:
-        if self._messages:
-            waiter = asyncio.get_running_loop().create_future()
-            self._empty_waiters.add(waiter)
+        if not self._messages:
+            return
+
+        waiter = asyncio.get_running_loop().create_future()
+        self._empty_waiters.add(waiter)
+        try:
             await waiter
+        finally:
+            # Callers get cancelled (Client._wait_qos_queue_drained); don't
+            # accumulate dead waiters.
+            self._empty_waiters.discard(waiter)
 
     def clear(self):
         self._messages.clear()

@@ -9,9 +9,14 @@ import pytest_asyncio
 import gmqtt
 from tests.utils import Callbacks, cleanup, clean_retained
 
-if os.getenv('TOKEN'):
+# Read once and branch on that: reading TOKEN twice let the flespi branch be
+# selected while `username` came back None, so every test died in
+# set_auth_credentials before reaching the broker.
+TOKEN = os.getenv('TOKEN')
+
+if TOKEN:
     host = 'mqtt.flespi.io'
-    username = os.getenv("TOKEN")
+    username = TOKEN
     password = None
     port = 1883
 else:

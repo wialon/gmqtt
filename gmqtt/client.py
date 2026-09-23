@@ -76,14 +76,17 @@ class Client(SubscriptionsHandlerMixin):
         self._connect_properties = kwargs
 
         self._connack_received = asyncio.Event()
+        self._connection_lost = asyncio.Event()
         self._package_handler = MqttPackageHandler(
             connack_event=self._connack_received,
+            connection_lost_event=self._connection_lost,
             connection_state=self._connection_state,
             reconnect_callback=self.reconnect,
             disconnect_callback=self.disconnect,
             resend_qos_callback=self._resend_qos_messages,
             clear_qos_callback=self._clear_resend_qos_queue,
             remove_message_callback=self._remove_message_from_queue,
+            store_message_callback=self._store_message_in_queue,
             send_command_with_mid_callback=self._send_command_with_mid,
             connect_properties=self._connect_properties,
             subscriptions_getter=lambda: self.subscriptions,
@@ -249,6 +252,10 @@ class Client(SubscriptionsHandlerMixin):
     def reconnect_retries(self, value):
         self._package_handler.reconnect_retries = value
 
+    def _store_message_in_queue(self, mid, raw_package):
+        # Also used to swap a PUBLISH for its PUBREL once PUBREC arrives.
+        self._persistent_storage.push_message(mid, raw_package)
+
     def _remove_message_from_queue(self, mid):
         self._logger.debug("[Client] remove message. mid: %s", mid)
         self._persistent_storage.remove_message_by_mid(mid)
@@ -277,8 +284,9 @@ class Client(SubscriptionsHandlerMixin):
                 "[Client] replaying %s inflight message(s)", len(msgs)
             )
 
-            self._persistent_storage.clear()
-
+            # Messages stay stored for the whole replay: clearing and
+            # re-pushing would fire every wait_empty() waiter, reporting the
+            # queue drained while nothing has been acked yet.
             for mid, package in msgs:
                 try:
                     self._connection.send_package(package)
@@ -287,8 +295,6 @@ class Client(SubscriptionsHandlerMixin):
                         "[Client] failed to resend mid=%s, kept in queue for next reconnect",
                         mid, exc_info=exc
                     )
-
-                self._persistent_storage.push_message(mid, package)
 
     def _clear_resend_qos_queue(self):
         self._persistent_storage.clear()
@@ -309,6 +315,10 @@ class Client(SubscriptionsHandlerMixin):
         self._keepalive = keepalive
         self._is_active = True
 
+        # Fresh attempt: drop a previous refusal, which would suppress
+        # reconnects and raise a stale error below.
+        self._package_handler.reset_error_state()
+
         self._connection_state.protocol_version = version
 
         self._connection = await self._create_connection(
@@ -328,10 +338,37 @@ class Client(SubscriptionsHandlerMixin):
         )
         await self._connack_received.wait()
 
-        await self._persistent_storage.wait_empty()
+        await self._wait_qos_queue_drained()
 
         if raise_exc and self._package_handler.has_error:
             raise self._package_handler.propagate_error()
+
+    async def _wait_qos_queue_drained(self):
+        """Wait for replayed QoS messages to be acked, bounded by the connection.
+
+        The queue can only drain while this connection is up, so give up if it
+        drops; otherwise connect() blocks forever. Racing an Event rather than
+        poking the waiters is deliberate — a one-shot notification can fire
+        before connect() registers its waiter, reintroducing the hang.
+        """
+        drained = asyncio.ensure_future(self._persistent_storage.wait_empty())
+        lost = asyncio.ensure_future(self._connection_lost.wait())
+        try:
+            await asyncio.wait({drained, lost}, return_when=asyncio.FIRST_COMPLETED)
+            # asyncio.wait never raises; surface storage failures instead of
+            # reporting a phantom drain.
+            if drained.done() and not drained.cancelled():
+                drained.result()
+            elif lost.done():
+                self._logger.warning(
+                    "[Client] connection lost before the QoS queue drained; "
+                    "%s message(s) kept for the next reconnect",
+                    len(self._persistent_storage.get_all()),
+                )
+        finally:
+            for task in (drained, lost):
+                if not task.done():
+                    task.cancel()
 
     def _exit_reconnecting_state(self):
         self._connection_state.reconnecting_now = False
@@ -340,6 +377,11 @@ class Client(SubscriptionsHandlerMixin):
         # important for reconnects! Make sure u know what u're doing if you wanna change it :(
         self._exit_reconnecting_state()
         self._package_handler.clear_topics_aliases()
+        # A CONNACK left set by a refused attempt would otherwise make
+        # connect() return before this connection's CONNACK arrives, and the
+        # previous loss must not short-circuit the drain on this connection.
+        self._connack_received.clear()
+        self._connection_lost.clear()
         connection = await MQTTConnection.create_connection(
             host,
             port,
@@ -417,6 +459,8 @@ class Client(SubscriptionsHandlerMixin):
         self._package_handler.clear_topics_aliases()
 
         self._connack_received.clear()
+        # This connection will not acknowledge anything else.
+        self._connection_lost.set()
         if self._connection:
             self._connection.send_disconnect(reason_code=reason_code, **properties)
             await self._connection.close()
@@ -431,7 +475,9 @@ class Client(SubscriptionsHandlerMixin):
 
         mid, package = self._connection.publish(message)
 
-        if qos > 0:
+        # message.qos, not the argument: a prebuilt Message leaves the
+        # argument at 0, so QoS 1/2 would never be stored or replayed.
+        if message.qos > 0:
             self._persistent_storage.push_message(mid, package)
 
     def _send_simple_command(self, cmd):
