@@ -7,7 +7,7 @@ from functools import partial
 from typing import Awaitable, Callable, List, Optional
 
 from .constants import MQTTCommands, MQTTv50, MQTTv311, PubRecReasonCode
-from .package import Package
+from .package import CommandWithMidPacket, Package
 from .property import Property
 from .utils import (
     IdGenerator,
@@ -20,6 +20,16 @@ from ..subscription import Subscription
 
 def _empty_callback(*args, **kwargs):
     pass
+
+
+# Refusals that retrying cannot fix. reconnect_retries defaults to unlimited,
+# so reconnecting on these hammers the broker forever.
+_NON_RETRYABLE_V311_CONNACK_CODES = frozenset({1, 2, 4, 5})
+
+# Anything not listed (server busy, quota exceeded, ...) is transient.
+_NON_RETRYABLE_V50_CONNACK_CODES = frozenset(
+    {129, 130, 132, 133, 134, 135, 138, 140, 144, 149, 153, 154, 155, 156, 157}
+)
 
 
 class MQTTError(Exception):
@@ -152,6 +162,7 @@ class MqttPackageHandler(EventCallbackMixin):
         self,
         *args,
         connack_event: asyncio.Event,
+        connection_lost_event: asyncio.Event,
         connection_state: ConnectionState,
         reconnect_callback: Callable[..., Awaitable[None]],
         disconnect_callback: Callable[..., Awaitable[None]],
@@ -160,6 +171,7 @@ class MqttPackageHandler(EventCallbackMixin):
         connect_properties: dict,
         subscriptions_getter: Callable[[], List[Subscription]],
         remove_message_callback: Callable[[int], None],
+        store_message_callback: Callable[[int, bytes], None],
         send_command_with_mid_callback: Callable[..., None],
         receive_maximum: int = 65535,
         optimistic_acknowledgement: bool = True,
@@ -170,6 +182,7 @@ class MqttPackageHandler(EventCallbackMixin):
         super().__init__(*args, **kwargs)
 
         self._connack_received = connack_event
+        self._connection_lost = connection_lost_event
         self._connection_state = connection_state
         self._reconnect_callback = reconnect_callback
         self._disconnect_callback = disconnect_callback
@@ -178,11 +191,15 @@ class MqttPackageHandler(EventCallbackMixin):
         self._connect_properties = connect_properties
         self._subscriptions_getter = subscriptions_getter
         self._remove_message_callback = remove_message_callback
+        self._store_message_callback = store_message_callback
         self._send_command_with_mid_callback = send_command_with_mid_callback
         self._connack_properties: dict = {}
         self._messages_in = {}
         self._handler_cache = {}
         self._error = None
+        # Set on an unretryable refusal; also checked by the disconnect path.
+        self._permanent_failure = False
+        # Set by MQTTConnection.__init__ via set_connection() on each connect.
         self._connection = None
         self._server_topics_aliases = {}
 
@@ -191,8 +208,21 @@ class MqttPackageHandler(EventCallbackMixin):
 
         self._optimistic_acknowledgement = optimistic_acknowledgement
         self.id_generator = IdGenerator(max=receive_maximum)
+        self._default_id_max = receive_maximum
 
         self._logger = logger or logging.getLogger(__name__)
+
+    @property
+    def current_connection(self):
+        return self._connection
+
+    def set_connection(self, connection):
+        """Point the handler at the live connection.
+
+        Called by MQTTConnection on construction, so Server Keep Alive can be
+        pushed onto the current transport.
+        """
+        self._connection = connection
 
     @property
     def has_error(self):
@@ -206,6 +236,11 @@ class MqttPackageHandler(EventCallbackMixin):
     def propagate_error(self):
         if self._error:
             raise self._error
+
+    def reset_error_state(self):
+        """Forget a previous refusal so an explicit connect() starts clean."""
+        self._error = None
+        self._permanent_failure = False
 
     def get_subscriptions_by_mid(self, mid: int) -> List:
         return [sub for sub in self._subscriptions_getter() if sub.mid == mid]
@@ -275,11 +310,21 @@ class MqttPackageHandler(EventCallbackMixin):
     def _handle_disconnect_packet(self, cmd, packet):
         # reset server topics on disconnect
         self.clear_topics_aliases()
+        # Nothing more will be acked here; unblocks _wait_qos_queue_drained.
+        self._connection_lost.set()
 
-        future = asyncio.ensure_future(self._reconnect_callback(delay=True))
-        future.add_done_callback(
-            partial(self._handle_exception_in_future, msg="reconnect failed")
-        )
+        # The server closes the socket after a non-zero CONNACK, which arrives
+        # here as a synthetic DISCONNECT. Reconnecting would defeat the
+        # permanent-refusal check in _handle_connack_packet.
+        if self._permanent_failure:
+            self._logger.error(
+                "[MqttPackageHandler] not reconnecting after a permanent CONNACK refusal"
+            )
+        else:
+            future = asyncio.ensure_future(self._reconnect_callback(delay=True))
+            future.add_done_callback(
+                partial(self._handle_exception_in_future, msg="reconnect failed")
+            )
         self.on_disconnect(packet)
 
     def _parse_properties(self, packet):
@@ -305,10 +350,40 @@ class MqttPackageHandler(EventCallbackMixin):
         properties_dict = dict(properties_dict)
         return properties_dict, left_packet
 
+    def _is_retryable_connack(self, result):
+        """Whether auto-reconnect has any chance of succeeding after `result`."""
+        if self._connection_state.protocol_version >= MQTTv50:
+            return result not in _NON_RETRYABLE_V50_CONNACK_CODES
+        return result not in _NON_RETRYABLE_V311_CONNACK_CODES
+
+    def _apply_receive_maximum(self):
+        """Apply CONNACK Receive Maximum to the id allocator.
+
+        Absent means the 65535 default (§3.2.2.3.3), so reset instead of
+        keeping the previous connection's window.
+        """
+        values = self._connack_properties.get("receive_maximum")
+        receive_maximum = values[0] if values else self._default_id_max
+        # _max < 2 makes _mid_generate raise OverflowError on every
+        # allocation, so the client could never publish again.
+        if receive_maximum < 2:
+            self._logger.warning(
+                "[MqttPackageHandler] ignoring invalid receive_maximum=%s",
+                receive_maximum,
+            )
+            receive_maximum = self._default_id_max
+        self.id_generator._max = receive_maximum
+
     def _update_keepalive_if_needed(self):
         if not self._connack_properties.get("server_keep_alive"):
             return
         self._keepalive = self._connack_properties["server_keep_alive"][0]
+        if self._connection is None:
+            self._logger.warning(
+                "[MqttPackageHandler] no connection to apply server_keep_alive=%s to",
+                self._keepalive,
+            )
+            return
         self._connection.keepalive = self._keepalive
 
     def _handle_connack_packet(self, cmd, packet):
@@ -335,18 +410,32 @@ class MqttPackageHandler(EventCallbackMixin):
                 # connect() so it can raise via propagate_error().
                 self._error = MQTTConnectError(result)
                 self._connack_received.set()
-                future = asyncio.ensure_future(self._reconnect_callback(delay=True))
-                future.add_done_callback(
-                    partial(self._handle_exception_in_future,
-                            msg="reconnect failed after refused CONNACK")
-                )
+
+                if self._is_retryable_connack(result):
+                    future = asyncio.ensure_future(self._reconnect_callback(delay=True))
+                    future.add_done_callback(
+                        partial(self._handle_exception_in_future,
+                                msg="reconnect failed after refused CONNACK")
+                    )
+                else:
+                    self._permanent_failure = True
+                    self._logger.error(
+                        "[MqttPackageHandler] CONNACK %s is permanent, not reconnecting",
+                        hex(result),
+                    )
 
             return
 
         # --- Step 2: successful CONNACK ---
         self._connection_state.failed_connections = 0
+        # Otherwise has_error stays True and the next connect() raises stale.
+        self._error = None
+        self._permanent_failure = False
 
         # --- Step 3: parse MQTT 5.0 properties (if present) ---
+        # Reset first: a reconnect whose CONNACK omits a property must not
+        # inherit the previous connection's value.
+        self._connack_properties = {}
         if len(packet) > 2:
             properties, _ = self._parse_properties(packet[2:])
             if properties is None:
@@ -364,9 +453,8 @@ class MqttPackageHandler(EventCallbackMixin):
             self._connack_properties = properties
             self._update_keepalive_if_needed()
 
-            # --- Step 4: apply broker's flow-control window ---
-            if "receive_maximum" in self._connack_properties:
-                self.id_generator._max = self._connack_properties["receive_maximum"][0]
+        # --- Step 4: apply broker's flow-control window ---
+        self._apply_receive_maximum()
 
         # --- Step 5: all state is consistent — unblock connect() ---
         self._connack_received.set()
@@ -406,12 +494,17 @@ class MqttPackageHandler(EventCallbackMixin):
             mid = None
 
         properties, packet = self._parse_properties(packet)
+
+        # Before touching `properties`: _parse_properties returns (None, None)
+        # on an unparseable block, and subscripting that raises TypeError.
+        if properties is None or packet is None:
+            self._logger.critical(
+                "[MqttPackageHandler] invalid message. Skipping: %s", raw_packet
+            )
+            return
+
         properties["dup"] = dup
         properties["retain"] = retain
-
-        if packet is None:
-            self._logger.critical("[MqttPackageHandler] invalid message. Skipping: {}".format(raw_packet))
-            return
 
         if "topic_alias" in properties:
             # TODO: need to add validation (topic alias must be greater than 0 and less than topic_alias_maximum)
@@ -502,6 +595,19 @@ class MqttPackageHandler(EventCallbackMixin):
         (mid, packet) = struct.unpack(pack_format, raw_packet)
         properties, packet = self._parse_properties(packet)
 
+        # (None, None) on an unparseable property block; len() would raise.
+        if properties is None or packet is None:
+            self._logger.critical(
+                "[MqttPackageHandler] invalid SUBACK. Skipping: %s", raw_packet
+            )
+            # No further SUBACK will arrive for this mid, so release it anyway;
+            # returning early would leak it and pin the Subscription.
+            for sub in self._subscriptions_getter():
+                if sub.mid == mid:
+                    sub.mid = None
+            self.id_generator.free_id(mid)
+            return
+
         pack_format = "!" + "B" * len(packet)
         granted_qoses = struct.unpack(pack_format, packet)
 
@@ -526,6 +632,17 @@ class MqttPackageHandler(EventCallbackMixin):
     def _handle_unsuback_packet(self, cmd, raw_packet):
         pack_format = "!H" + str(len(raw_packet) - 2) + "s"
         (mid, packet) = struct.unpack(pack_format, raw_packet)
+        # v5 UNSUBACK carries properties before the reason codes; without this
+        # the property bytes were handed to on_unsubscribe as reason codes.
+        properties, packet = self._parse_properties(packet)
+
+        if properties is None or packet is None:
+            self._logger.critical(
+                "[MqttPackageHandler] invalid UNSUBACK. Skipping: %s", raw_packet
+            )
+            self.id_generator.free_id(mid)
+            return
+
         pack_format = "!" + "B" * len(packet)
         granted_qos = struct.unpack(pack_format, packet)
 
@@ -552,18 +669,49 @@ class MqttPackageHandler(EventCallbackMixin):
         self._remove_message_from_queue(mid)
 
     def _handle_pubcomp_packet(self, cmd, packet):
-        pass
+        # QoS 2 outbound, final step: id reusable, stored packet droppable.
+        (mid,) = struct.unpack("!H", packet[:2])
+        self._logger.debug("[MqttPackageHandler] PUBCOMP mid: %s", mid)
+        self.id_generator.free_id(mid)
+        self._remove_message_from_queue(mid)
 
     def _handle_pubrec_packet(self, cmd, packet):
         (mid,) = struct.unpack("!H", packet[:2])
-        self._logger.debug("[MqttPackageHandler] PUBREC mid: %s", mid)
-        self.id_generator.free_id(mid)
-        self._remove_message_from_queue(mid)
+        # v5 carries an optional reason code; absent means success (§3.5.2.1).
+        reason_code = packet[2] if len(packet) > 2 else 0
+        self._logger.debug(
+            "[MqttPackageHandler] PUBREC mid: %s, reason: %s", mid, reason_code
+        )
+
+        if reason_code >= 0x80:
+            # §4.3.3: the flow ends here. Sending PUBREL would be a protocol
+            # error, and the broker need not answer it — which would pin the id
+            # and the stored packet until the connection drops.
+            self._logger.warning(
+                "[MqttPackageHandler] PUBREC mid %s refused (%s); dropping message",
+                mid, hex(reason_code),
+            )
+            self.id_generator.free_id(mid)
+            self._remove_message_from_queue(mid)
+            return
+        # §4.3.3: the id stays held until PUBCOMP, or it could be reissued
+        # while PUBREL/PUBCOMP are in flight. The stored PUBLISH is swapped for
+        # the PUBREL, because MQTT-4.4.0-1 wants a reconnect to replay that —
+        # replaying the PUBLISH would restart a handshake the broker finished.
+        self._store_message_callback(
+            mid,
+            CommandWithMidPacket.build_package(
+                MQTTCommands.PUBREL | 2,
+                mid,
+                False,
+                proto_ver=self._connection_state.protocol_version,
+            ),
+        )
         self._send_pubrel(mid, 0)
 
     def _handle_pubrel_packet(self, cmd, packet):
         (mid,) = struct.unpack("!H", packet[:2])
         self._logger.debug("[MqttPackageHandler] PUBREL mid: %s", mid)
         self._send_pubcomp(mid, 0)
-
-        self.id_generator.free_id(mid)
+        # Do NOT free `mid`: inbound QoS 2 flow, so it is the broker's id, not
+        # ours. See _handle_publish_packet.

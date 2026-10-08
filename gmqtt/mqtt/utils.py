@@ -1,4 +1,5 @@
 import asyncio
+import inspect
 import logging
 import struct
 from copy import deepcopy
@@ -47,7 +48,10 @@ class IdGenerator:
             if self._last_used_id in self._used_ids:
                 continue
 
-            if self._last_used_id == self._max:
+            # Wrap on >=, not ==: CONNACK receive_maximum can lower _max
+            # below the counter, which would otherwise never hit the bound
+            # and climb past 65535 until struct.pack("!H", mid) raises.
+            if self._last_used_id >= self._max:
                 self._last_used_id = 0
                 continue
 
@@ -118,7 +122,10 @@ def is_coroutine_function_or_partial(obj: Callable):
     while isinstance(obj, partial):
         obj = obj.func
 
-    return asyncio.iscoroutinefunction(obj)
+    # inspect.iscoroutinefunction, not asyncio.iscoroutinefunction: the latter
+    # is deprecated since 3.14. Since 3.12 inspect's version also recognises
+    # callables tagged with markcoroutinefunction.
+    return inspect.iscoroutinefunction(obj)
 
 
 def run_coroutine_or_function(func, *args, callback=None, **kwargs):

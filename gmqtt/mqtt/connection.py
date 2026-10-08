@@ -26,6 +26,8 @@ class MQTTConnection:
 
         self._logger = logger or logging.getLogger(__name__)
         self._handler = package_handler
+        # The handler outlives individual connections; re-point it at this one.
+        self._handler.set_connection(self)
 
     @classmethod
     async def create_connection(cls, host, port, ssl, clean_session, keepalive, connection_state: ConnectionState,
@@ -51,6 +53,13 @@ class MQTTConnection:
         self._keep_connection_callback = asyncio.get_event_loop().call_later(self._keepalive / 2, self._keep_connection)
 
     def put_package(self, pkg: Package):
+        # A superseded connection can still deliver buffered packets, notably
+        # the synthetic DISCONNECT from connection_lost. Routing those to the
+        # shared handler would abort the current connection's queue drain and
+        # schedule a reconnect against a healthy link.
+        if self._handler.current_connection is not self:
+            self._logger.debug("[RECV] dropping package from superseded connection")
+            return
         self._last_data_in = time.monotonic()
         self._handler(pkg)
 
