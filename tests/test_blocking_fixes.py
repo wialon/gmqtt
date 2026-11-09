@@ -189,6 +189,74 @@ async def test_permanent_refusal_survives_the_broker_closing_the_socket():
 
 
 @pytest.mark.asyncio
+async def test_permanent_refusal_is_visible_on_the_client():
+    """on_disconnect gets no error, so callers need a public way to tell a
+    dead client from one that will reconnect by itself."""
+    client, handler, _ = _handler("perm-public")
+    seen = []
+    client.on_disconnect = lambda c, packet, exc=None: seen.append(
+        (c.permanently_refused, c.connect_error)
+    )
+
+    handler._handle_connack_packet(0x20, _connack(0, 135))  # not authorized
+    await asyncio.sleep(0)
+    handler._handle_disconnect_packet(MQTTCommands.DISCONNECT, b"")
+
+    [(refused, error)] = seen
+    assert refused
+    assert isinstance(error, gmqtt.mqtt.handler.MQTTConnectError)
+    assert "135" in str(error)
+
+
+@pytest.mark.asyncio
+async def test_transient_refusal_is_not_permanent():
+    client, handler, _ = _handler("transient-public")
+
+    handler._handle_connack_packet(0x20, _connack(0, 137))  # server busy
+    await asyncio.sleep(0)
+
+    assert not client.permanently_refused
+    assert client.connect_error is not None
+
+    handler._handle_connack_packet(0x20, _connack(0, 0))
+    assert client.connect_error is None
+
+
+@pytest.mark.asyncio
+async def test_transient_refusal_after_permanent_one_clears_the_flag():
+    """135 then 137 (e.g. app called reconnect() instead of connect()) left
+    _permanent_failure set, so the transient refusal never reconnected."""
+    client, handler, calls = _handler("perm-then-transient")
+
+    handler._handle_connack_packet(0x20, _connack(0, 135))  # not authorized
+    await asyncio.sleep(0)
+    assert client.permanently_refused
+
+    handler._handle_connack_packet(0x20, _connack(0, 137))  # server busy
+    await asyncio.sleep(0)
+    assert not client.permanently_refused
+
+    handler._handle_disconnect_packet(MQTTCommands.DISCONNECT, b"")
+    await asyncio.sleep(0)
+    assert len(calls) == 2
+
+
+@pytest.mark.asyncio
+async def test_not_reconnecting_log_names_the_refusal(caplog):
+    """The CONNACK log never showed up in Sentry while this one did, so the
+    refusal reason was lost; carry it here too."""
+    _, handler, _ = _handler("perm-log")
+
+    handler._handle_connack_packet(0x20, _connack(0, 135))
+    await asyncio.sleep(0)
+    caplog.clear()
+    handler._handle_disconnect_packet(MQTTCommands.DISCONNECT, b"")
+
+    [record] = [r for r in caplog.records if "not reconnecting" in r.getMessage()]
+    assert "135" in record.getMessage()
+
+
+@pytest.mark.asyncio
 async def test_transient_refusal_still_reconnects():
     _, handler, calls = _handler("transient")
 
