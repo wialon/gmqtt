@@ -331,9 +331,10 @@ class MqttPackageHandler(EventCallbackMixin):
         if self._connection_state.protocol_version < MQTTv50:
             # If protocol is version is less than 5.0, there is no properties in packet
             return {}, packet
-        properties_len, left_packet = unpack_variable_byte_integer(packet)
-        packet = left_packet[:properties_len]
-        left_packet = left_packet[properties_len:]
+        # memoryview: O(1) slicing; bytes slicing made this O(n^2).
+        properties_len, view = unpack_variable_byte_integer(memoryview(packet))
+        packet = view[:properties_len]
+        left_packet = bytes(view[properties_len:])
         properties_dict = defaultdict(list)
         while packet:
             (property_identifier,) = struct.unpack("!B", packet[:1])

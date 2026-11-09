@@ -5,7 +5,7 @@ import struct
 from copy import deepcopy
 from dataclasses import dataclass, field
 from functools import partial
-from typing import Callable
+from typing import Callable, Tuple, Union
 
 from .constants import DEFAULT_CONFIG, MQTTv50
 
@@ -102,9 +102,11 @@ def unpack_variable_byte_integer(bts):
     return value, bts[i + 1 :]
 
 
-def unpack_utf8(bytes_array):
+def unpack_utf8(
+    bytes_array: Union[bytes, memoryview],
+) -> Tuple[str, Union[bytes, memoryview]]:
     (str_len,) = struct.unpack("!H", bytes_array[:2])
-    value = bytes_array[2 : 2 + str_len].decode("utf-8")
+    value = str(bytes_array[2 : 2 + str_len], "utf-8")
     left_str = bytes_array[2 + str_len :]
     return value, left_str
 

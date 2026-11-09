@@ -21,7 +21,7 @@ class Property:
             value = (value1, value2)
         elif self.bytes_struct == 'b':
             str_len, = struct.unpack('!H', bytes_array[:2])
-            value = bytes_array[2:2 + str_len]
+            value = bytes(bytes_array[2:2 + str_len])
             left_str = bytes_array[2 + str_len:]
         elif self.bytes_struct == 'vbi':
             value, left_str = unpack_variable_byte_integer(bytes_array)
