@@ -252,6 +252,20 @@ class Client(SubscriptionsHandlerMixin):
     def reconnect_retries(self, value):
         self._package_handler.reconnect_retries = value
 
+    @property
+    def connect_error(self):
+        """The last CONNACK refusal (MQTTConnectError), None once connected."""
+        return self._package_handler.error
+
+    @property
+    def permanently_refused(self):
+        """True when the broker refused with a code auto-reconnect won't retry.
+
+        The client stays down until connect() is called again, typically after
+        fixing the credentials with set_auth_credentials().
+        """
+        return self._package_handler.permanently_refused
+
     def _store_message_in_queue(self, mid, raw_package):
         # Also used to swap a PUBLISH for its PUBREL once PUBREC arrives.
         self._persistent_storage.push_message(mid, raw_package)

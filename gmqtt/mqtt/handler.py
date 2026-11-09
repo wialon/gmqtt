@@ -229,6 +229,16 @@ class MqttPackageHandler(EventCallbackMixin):
         return self._error is not None
 
     @property
+    def error(self) -> Optional[MQTTConnectError]:
+        """The last connect refusal, None once a CONNACK succeeds."""
+        return self._error
+
+    @property
+    def permanently_refused(self) -> bool:
+        """True after a CONNACK that auto-reconnect will not retry."""
+        return self._permanent_failure
+
+    @property
     def properties(self) -> dict:
         """Merged connect + connack properties, passed to the on_connect callback."""
         return {**self._connack_properties, **self._connect_properties}
@@ -317,8 +327,10 @@ class MqttPackageHandler(EventCallbackMixin):
         # here as a synthetic DISCONNECT. Reconnecting would defeat the
         # permanent-refusal check in _handle_connack_packet.
         if self._permanent_failure:
+            # carries the code: this is the event that reliably reaches log aggregators
             self._logger.error(
-                "[MqttPackageHandler] not reconnecting after a permanent CONNACK refusal"
+                "[MqttPackageHandler] not reconnecting after a permanent CONNACK refusal: %s",
+                self._error,
             )
         else:
             future = asyncio.ensure_future(self._reconnect_callback(delay=True))
@@ -411,15 +423,18 @@ class MqttPackageHandler(EventCallbackMixin):
                 # connect() so it can raise via propagate_error().
                 self._error = MQTTConnectError(result)
                 self._connack_received.set()
+                # Set both ways: a permanent refusal followed by a transient
+                # one (e.g. after reconnect()) must not stay "permanent".
+                retryable = self._is_retryable_connack(result)
+                self._permanent_failure = not retryable
 
-                if self._is_retryable_connack(result):
+                if retryable:
                     future = asyncio.ensure_future(self._reconnect_callback(delay=True))
                     future.add_done_callback(
                         partial(self._handle_exception_in_future,
                                 msg="reconnect failed after refused CONNACK")
                     )
                 else:
-                    self._permanent_failure = True
                     self._logger.error(
                         "[MqttPackageHandler] CONNACK %s is permanent, not reconnecting",
                         hex(result),
