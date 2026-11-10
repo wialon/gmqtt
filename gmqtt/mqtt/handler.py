@@ -31,6 +31,11 @@ _NON_RETRYABLE_V50_CONNACK_CODES = frozenset(
     {129, 130, 132, 133, 134, 135, 138, 140, 144, 149, 153, 154, 155, 156, 157}
 )
 
+# Refusals a credentials provider can fix by handing out new credentials:
+# bad user name or password, not authorized.
+_AUTH_V311_CONNACK_CODES = frozenset({4, 5})
+_AUTH_V50_CONNACK_CODES = frozenset({134, 135})
+
 
 class MQTTError(Exception):
     pass
@@ -70,6 +75,10 @@ class MQTTConnectError(MQTTError):
     def __init__(self, code):
         self._code = code
         self.message = self.__messages__.get(code, "Unknown error")
+
+    @property
+    def code(self):
+        return self._code
 
     def __str__(self):
         return "code {} ({})".format(self._code, self.message)
@@ -199,6 +208,8 @@ class MqttPackageHandler(EventCallbackMixin):
         self._error = None
         # Set on an unretryable refusal; also checked by the disconnect path.
         self._permanent_failure = False
+        # Set by Client when a credentials provider can hand out new credentials.
+        self.retry_auth_refusals = False
         # Set by MQTTConnection.__init__ via set_connection() on each connect.
         self._connection = None
         self._server_topics_aliases = {}
@@ -363,8 +374,17 @@ class MqttPackageHandler(EventCallbackMixin):
         properties_dict = dict(properties_dict)
         return properties_dict, left_packet
 
+    def _is_auth_refusal(self, result):
+        """Whether CONNACK `result` rejects the credentials themselves."""
+        if self._connection_state.protocol_version >= MQTTv50:
+            return result in _AUTH_V50_CONNACK_CODES
+        return result in _AUTH_V311_CONNACK_CODES
+
     def _is_retryable_connack(self, result):
         """Whether auto-reconnect has any chance of succeeding after `result`."""
+        # new credentials may succeed where the refused ones could not
+        if self.retry_auth_refusals and self._is_auth_refusal(result):
+            return True
         if self._connection_state.protocol_version >= MQTTv50:
             return result not in _NON_RETRYABLE_V50_CONNACK_CODES
         return result not in _NON_RETRYABLE_V311_CONNACK_CODES
