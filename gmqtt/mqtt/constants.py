@@ -123,4 +123,6 @@ UNLIMITED_RECONNECTS = -1
 DEFAULT_CONFIG = {
     'reconnect_delay': 6,
     'reconnect_retries': UNLIMITED_RECONNECTS,
+    # cap of the backoff between failed reconnect attempts
+    'reconnect_delay_max': 300,
 }

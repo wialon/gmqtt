@@ -1,12 +1,14 @@
 import asyncio
+import inspect
 import json
 import logging
 import uuid
 from functools import partial
+from typing import Any, Awaitable, Callable, Optional, Tuple, Union
 
 from .mqtt.connection import MQTTConnection
 from .mqtt.constants import UNLIMITED_RECONNECTS, MQTTv50
-from .mqtt.handler import MqttPackageHandler
+from .mqtt.handler import MQTTConnectError, MqttPackageHandler
 from .mqtt.utils import ConnectionState
 from .storage import PersistentStorage
 from .subscription import SubscriptionsHandlerMixin
@@ -40,17 +42,37 @@ class Message:
             raise ValueError("Payload too large.")
 
 
+# (username, password); None for anonymous / no password
+Credentials = Tuple[Optional[Union[str, bytes]], Optional[Union[str, bytes]]]
+# (client, refusal or None) -> credentials, sync or async
+CredentialsProvider = Callable[
+    ["Client", Optional[MQTTConnectError]],
+    Union[Credentials, Awaitable[Credentials]],
+]
+
+
 class Client(SubscriptionsHandlerMixin):
     def __init__(
         self,
-        client_id,
-        clean_session=True,
-        optimistic_acknowledgement=True,
-        will_message=None,
-        persistent_storage=None,
-        logger=None,
-        **kwargs
+        client_id: Optional[str],
+        clean_session: bool = True,
+        optimistic_acknowledgement: bool = True,
+        will_message: Optional[Message] = None,
+        persistent_storage: Optional[PersistentStorage] = None,
+        logger: Optional[logging.Logger] = None,
+        credentials_provider: Optional[CredentialsProvider] = None,
+        **kwargs: Any
     ):
+        """
+        credentials_provider: optional ``(client, error) -> (username, password)``
+        callable, sync or async, called before every connect and reconnect. ``error`` is the
+        MQTTConnectError the broker answered since the provider was last
+        called, None otherwise (e.g. after a plain connection loss), so the
+        provider can issue new credentials only when the broker refused the
+        old ones. With a provider, auto-reconnect retries auth refusals (bad
+        user name or password, not authorized) instead of giving up; an
+        explicit connect() just raises them.
+        """
 
         super().__init__()
 
@@ -105,6 +127,10 @@ class Client(SubscriptionsHandlerMixin):
 
         self._username = None
         self._password = None
+        self._credentials_provider = credentials_provider
+        self._package_handler.retry_auth_refusals = credentials_provider is not None
+        # The refusal last handed to the provider: it gets each refusal once.
+        self._provider_seen_error = None
 
         self._host = None
         self._port = None
@@ -314,14 +340,52 @@ class Client(SubscriptionsHandlerMixin):
         self._persistent_storage.clear()
 
     def set_auth_credentials(self, username, password=None):
-        self._username = username.encode()
-        self._password = password
-        if isinstance(self._password, str):
-            self._password = password.encode()
+        # None connects anonymously (username) or without a password; bytes are used as they are
+        for name, value in (("username", username), ("password", password)):
+            if value is not None and not isinstance(value, (str, bytes, bytearray, memoryview)):
+                raise TypeError("{} must be str, bytes-like or None, got {!r}".format(name, value))
+        self._username = username.encode() if isinstance(username, str) else username
+        self._password = password.encode() if isinstance(password, str) else password
+
+    async def _refresh_credentials(self):
+        if self._credentials_provider is None:
+            return
+        # captured before the await: a refusal arriving meanwhile must stay unseen
+        current = error = self._package_handler.error
+        if error is self._provider_seen_error:
+            error = None  # already acted upon; e.g. the retry then failed with an OSError
+        result = self._credentials_provider(self, error)
+        if inspect.isawaitable(result):
+            result = await result
+        try:
+            username, password = result
+        except (TypeError, ValueError):
+            raise TypeError(
+                "credentials_provider must return (username, password), got {!r}".format(result)
+            ) from None
+        self.set_auth_credentials(username, password)
+        # Only once accepted: a provider that failed must see the refusal again.
+        self._provider_seen_error = current
+
+    def _next_reconnect_delay(self):
+        """reconnect_delay after a connection loss, then doubling with each failed
+        attempt in a row (refusal, OSError, provider failure), up to reconnect_delay_max."""
+        config = self._connection_state.config
+        delay = config["reconnect_delay"]
+        failures = self._connection_state.failed_connections  # reset by a successful CONNACK
+        if failures == 0:
+            return delay
+        base = delay if delay > 0 else 1  # 0 * 2**n would never back off
+        cap = max(config["reconnect_delay_max"], delay)
+        # bounded exponent: a float base overflows past 2**1023
+        return min(base * 2 ** min(failures - 1, 32), cap)
 
     async def connect(
         self, host, port=1883, ssl=False, keepalive=60, version=MQTTv50, raise_exc=True
     ):
+        # Before reset_error_state(): the provider must see why a previous attempt failed.
+        await self._refresh_credentials()
+
         # Init connection
         self._host = host
         self._port = port
@@ -335,22 +399,28 @@ class Client(SubscriptionsHandlerMixin):
 
         self._connection_state.protocol_version = version
 
-        self._connection = await self._create_connection(
-            host,
-            port=self._port,
-            ssl=self._ssl,
-            clean_session=self._clean_session,
-            keepalive=keepalive,
-        )
+        # An auth refusal is raised to the caller below, who decides whether to
+        # retry; a background reconnect as well would race their connect().
+        self._package_handler.retry_auth_refusals = False
+        try:
+            self._connection = await self._create_connection(
+                host,
+                port=self._port,
+                ssl=self._ssl,
+                clean_session=self._clean_session,
+                keepalive=keepalive,
+            )
 
-        await self._connection.auth(
-            self._client_id,
-            self._username,
-            self._password,
-            will_message=self._will_message,
-            **self._connect_properties
-        )
-        await self._connack_received.wait()
+            await self._connection.auth(
+                self._client_id,
+                self._username,
+                self._password,
+                will_message=self._will_message,
+                **self._connect_properties
+            )
+            await self._connack_received.wait()
+        finally:
+            self._package_handler.retry_auth_refusals = self._credentials_provider is not None
 
         await self._wait_qos_queue_drained()
 
@@ -438,7 +508,22 @@ class Client(SubscriptionsHandlerMixin):
             )
 
         if delay:
-            await asyncio.sleep(self._connection_state.config["reconnect_delay"])
+            await asyncio.sleep(self._next_reconnect_delay())
+
+        if self._reconnect_cancelled():
+            return
+        try:
+            await self._refresh_credentials()
+        except asyncio.CancelledError:
+            # otherwise _allow_reconnect() refuses every later reconnect
+            self._exit_reconnecting_state()
+            raise  # a subclass of Exception before Python 3.8
+        except Exception as exc:
+            self._retry_reconnect_later("credentials provider failed", exc)
+            return
+        # the provider may take a while (e.g. fetching a token)
+        if self._reconnect_cancelled():
+            return
 
         try:
             self._connection = await self._create_connection(
@@ -449,12 +534,7 @@ class Client(SubscriptionsHandlerMixin):
                 keepalive=self._keepalive,
             )
         except OSError as exc:
-            self._connection_state.failed_connections += 1
-            self._logger.warning(
-                "[Client] failed to reconnect. Number of retries: %s. Reason: %s",
-                self._connection_state.failed_connections, exc
-            )
-            asyncio.ensure_future(self.reconnect(delay=True))
+            self._retry_reconnect_later("failed to reconnect", exc)
             return
 
         await self._connection.auth(
@@ -464,6 +544,23 @@ class Client(SubscriptionsHandlerMixin):
             will_message=self._will_message,
             **self._connect_properties
         )
+
+    def _reconnect_cancelled(self):
+        """Whether disconnect() was called while reconnect() was waiting."""
+        if self._is_active:
+            return False
+        self._exit_reconnecting_state()
+        return True
+
+    def _retry_reconnect_later(self, what, exc):
+        self._connection_state.failed_connections += 1
+        self._logger.warning(
+            "[Client] %s. Number of retries: %s. Reason: %r",
+            what, self._connection_state.failed_connections, exc
+        )
+        # _create_connection() normally clears this flag; without it the next reconnect is refused
+        self._exit_reconnecting_state()
+        asyncio.ensure_future(self.reconnect(delay=True))
 
     async def disconnect(self, reason_code=0, **properties):
         self._is_active = False

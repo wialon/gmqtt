@@ -161,7 +161,32 @@ client = MQTTClient("client-id")
 client.set_config({'reconnect_retries': 10, 'reconnect_delay': 60})
 ```
 Code above will set number of reconnect attempts to 10 and delay between reconnect attempts to 1min (60s). By default `reconnect_delay=6` and  `reconnect_retries=-1` which stands for infinity.
+The first reconnect after a lost connection waits `reconnect_delay`; after each failed attempt in a row (refusal, network error, ...)
+the delay doubles (starting from 1s if `reconnect_delay` is 0), up to `reconnect_delay_max` (300s by default):
+```python
+client.set_config({'reconnect_delay_max': 120})
+```
 Note that manually calling `await client.disconnect()` will set `reconnect_retries` for 0, which will stop auto reconnect.
+
+A refusal that retrying cannot fix (bad credentials, banned client, ...) stops the reconnects; `client.permanently_refused`
+then turns `True` and `client.connect_error` holds the refusal.
+
+#### Rotating credentials
+If credentials expire (e.g. tokens), pass a `credentials_provider`. gmqtt awaits it before every connect and reconnect,
+and uses what it returns instead of the credentials set with `set_auth_credentials`:
+```python
+async def credentials(client, error):
+    # error: the refusal (MQTTConnectError) since the provider was last called,
+    # None otherwise (e.g. after a plain connection loss)
+    if error is not None and error.code in (134, 135):  # bad user name or password, not authorized
+        await issuer.refresh()
+    return issuer.token, None
+
+client = MQTTClient("client-id", credentials_provider=credentials)
+```
+With a provider, auto-reconnect retries auth refusals (`134`/`135`, `4`/`5` on MQTT 3.1.1), as new credentials may succeed.
+An explicit `await client.connect(...)` still raises them, leaving the retry to the caller.
+Other permanent refusals still stop the reconnects, since new credentials cannot fix them.
 
 ### Asynchronous on_message callback
 You can define asynchronous on_message callback.
