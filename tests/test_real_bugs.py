@@ -206,7 +206,6 @@ def _handler():
         pass
 
     handler._reconnect_callback = noop
-    handler._disconnect_callback = noop
     return client, handler
 
 

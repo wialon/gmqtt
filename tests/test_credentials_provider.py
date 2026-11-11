@@ -68,51 +68,55 @@ def _client(provider=None, monkeypatch=None):
 
 
 @pytest.mark.asyncio
-async def test_without_provider_auth_refusal_stays_permanent():
+@pytest.mark.parametrize("code", [BAD_CREDENTIALS, NOT_AUTHORIZED, BANNED])
+async def test_permanent_refusal_is_retried_without_a_provider(code):
     client, reconnects, _ = _client()
-
-    client._package_handler._handle_connack_packet(0x20, _connack(0, NOT_AUTHORIZED))
-    await asyncio.sleep(0)
-
-    assert client.permanently_refused
-    assert reconnects == []
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("code", [BAD_CREDENTIALS, NOT_AUTHORIZED])
-async def test_with_provider_auth_refusal_is_retried(code):
-    client, reconnects, _ = _client(_Provider("fresh"))
 
     client._package_handler._handle_connack_packet(0x20, _connack(0, code))
     await asyncio.sleep(0)
 
-    assert not client.permanently_refused
+    assert client.permanently_refused
     assert reconnects == [True]
 
 
 @pytest.mark.asyncio
-async def test_with_provider_v311_auth_refusal_is_retried():
+@pytest.mark.parametrize("code", [BAD_CREDENTIALS, NOT_AUTHORIZED])
+async def test_with_provider_auth_refusal_is_routine(code, caplog):
+    """The provider renews the credentials: no permanent flag, no ERROR log."""
+    client, reconnects, _ = _client(_Provider("fresh"))
+
+    client._package_handler._handle_connack_packet(0x20, _connack(0, code))
+    await asyncio.sleep(0)
+    client._package_handler._handle_disconnect_packet(MQTTCommands.DISCONNECT, b"")
+    await asyncio.sleep(0)
+
+    assert not client.permanently_refused
+    assert reconnects == [True, True]
+    assert not [r for r in caplog.records if r.levelname == "ERROR"]
+
+
+@pytest.mark.asyncio
+async def test_with_provider_other_permanent_refusals_stay_permanent():
+    """New credentials cannot lift a ban: still retried, but flagged."""
+    client, reconnects, _ = _client(_Provider("fresh"))
+
+    client._package_handler._handle_connack_packet(0x20, _connack(0, BANNED))
+    await asyncio.sleep(0)
+
+    assert client.permanently_refused
+    assert reconnects == [True]
+
+
+@pytest.mark.asyncio
+async def test_with_provider_v311_auth_refusal_is_routine():
     client, reconnects, _ = _client(_Provider("fresh"))
     client._connection_state.protocol_version = MQTTv311
 
     client._package_handler._handle_connack_packet(0x20, _connack(0, 5))
     await asyncio.sleep(0)
 
+    assert not client.permanently_refused
     assert reconnects == [True]
-
-
-@pytest.mark.asyncio
-async def test_with_provider_other_permanent_refusals_still_stop():
-    """New credentials cannot lift a ban, so retrying would only hammer the broker."""
-    client, reconnects, _ = _client(_Provider("fresh"))
-
-    client._package_handler._handle_connack_packet(0x20, _connack(0, BANNED))
-    await asyncio.sleep(0)
-    client._package_handler._handle_disconnect_packet(MQTTCommands.DISCONNECT, b"")
-    await asyncio.sleep(0)
-
-    assert client.permanently_refused
-    assert reconnects == []
 
 
 @pytest.mark.asyncio
@@ -238,9 +242,8 @@ async def test_connect_asks_the_provider_before_forgetting_the_refusal():
 
 
 @pytest.mark.asyncio
-async def test_explicit_connect_raises_auth_refusal_without_retrying(monkeypatch):
-    """A background reconnect next to the caller's own retry sent two CONNECTs
-    with the same client id."""
+async def test_explicit_connect_raises_the_refusal_and_keeps_reconnecting(monkeypatch):
+    """As in 0.7.0: the caller learns of the refusal, auto-reconnect carries on."""
     client, reconnects, _ = _client(_Provider("stale"), monkeypatch)
 
     class _Refusing:
@@ -257,10 +260,8 @@ async def test_explicit_connect_raises_auth_refusal_without_retrying(monkeypatch
         await client.connect("broker")
     await asyncio.sleep(0)
 
-    assert reconnects == []
-    assert client.permanently_refused
-    # later connection losses still retry auth refusals
-    assert client._package_handler.retry_auth_refusals
+    assert reconnects == [True]
+    assert client.connect_error.code == NOT_AUTHORIZED
 
 
 @pytest.mark.asyncio
@@ -411,3 +412,31 @@ def test_set_auth_credentials_keeps_accepting_buffers(password):
     client.set_auth_credentials("user", password)
 
     assert client._password is password
+
+
+@pytest.mark.asyncio
+async def test_refusal_and_its_disconnect_open_one_connection(monkeypatch):
+    """Both schedule a reconnect, as in 0.7.0; reconnecting_now lets only one run."""
+    client, _, _ = _client(_Provider("a", "b", "c"), monkeypatch)
+    client._package_handler._reconnect_callback = client.reconnect  # the real one
+    client.reconnect_delay = 0.01
+    attempts = []
+
+    class _Banned:
+        async def auth(self, *args, **kwargs):
+            if len(attempts) == 1:
+                _refuse(client, BANNED)
+                # the broker then closes the socket
+                client._package_handler._handle_disconnect_packet(MQTTCommands.DISCONNECT, b"")
+
+    async def create_connection(*args, **kwargs):
+        client._exit_reconnecting_state()
+        attempts.append(1)
+        return _Banned()
+
+    monkeypatch.setattr(client, "_create_connection", create_connection)
+
+    await client.reconnect(delay=False)  # refused
+    await asyncio.sleep(0.1)  # past the backoff
+
+    assert len(attempts) == 2, "one retry, not two"

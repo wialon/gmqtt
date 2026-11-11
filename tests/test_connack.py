@@ -71,13 +71,9 @@ def _make_handler():
     async def fake_reconnect(delay=False):
         reconnect_calls.append(delay)
 
-    async def fake_disconnect():
-        pass
-
     handler._resend_qos_callback = fake_resend
     handler._clear_qos_callback = fake_clear
     handler._reconnect_callback = fake_reconnect
-    handler._disconnect_callback = fake_disconnect
 
     return client, handler, resend_calls, clear_calls, reconnect_calls
 

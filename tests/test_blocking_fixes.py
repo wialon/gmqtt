@@ -26,11 +26,7 @@ def _handler(name="test"):
     async def fake_reconnect(delay=False):
         calls.append(delay)
 
-    async def fake_disconnect():
-        pass
-
     handler._reconnect_callback = fake_reconnect
-    handler._disconnect_callback = fake_disconnect
     return client, handler, calls
 
 
@@ -161,23 +157,23 @@ async def test_invalid_receive_maximum_leaves_the_allocator_usable():
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
-async def test_no_reconnect_on_permanent_refusal():
-    """reconnect_retries defaults to unlimited, so bad credentials looped."""
+@pytest.mark.parametrize("code", [134, 135, 138, 133, 156, 157])
+async def test_permanent_refusal_is_retried_with_backoff(code):
+    """0.8/0.9 gave up for good, yet a ban is lifted, a token renewed, a server back."""
     _, handler, calls = _handler("perm")
 
-    handler._handle_connack_packet(0x20, _connack(0, 134))  # bad user/password
+    handler._handle_connack_packet(0x20, _connack(0, code))
     await asyncio.sleep(0)
 
-    assert calls == []
-    assert handler.has_error
+    assert calls == [True]
+    assert handler.permanently_refused
     assert handler._connack_received.is_set(), "connect() must still unblock"
 
 
 @pytest.mark.asyncio
-async def test_permanent_refusal_survives_the_broker_closing_the_socket():
+async def test_permanent_refusal_flag_survives_the_broker_closing_the_socket():
     """The server closes the connection after a non-zero CONNACK, which arrives
-    as a synthetic DISCONNECT. That path reconnected unconditionally, undoing
-    the check above."""
+    as a synthetic DISCONNECT; its reconnect is refused by reconnecting_now."""
     _, handler, calls = _handler("perm-disconnect")
 
     handler._handle_connack_packet(0x20, _connack(0, 134))
@@ -185,7 +181,8 @@ async def test_permanent_refusal_survives_the_broker_closing_the_socket():
     handler._handle_disconnect_packet(MQTTCommands.DISCONNECT, b"")
     await asyncio.sleep(0)
 
-    assert calls == []
+    assert handler.permanently_refused
+    assert calls == [True, True]
 
 
 @pytest.mark.asyncio
@@ -224,9 +221,9 @@ async def test_transient_refusal_is_not_permanent():
 
 @pytest.mark.asyncio
 async def test_transient_refusal_after_permanent_one_clears_the_flag():
-    """135 then 137 (e.g. app called reconnect() instead of connect()) left
-    _permanent_failure set, so the transient refusal never reconnected."""
-    client, handler, calls = _handler("perm-then-transient")
+    """135 then 137 (e.g. app called reconnect() instead of connect()) must
+    not stay "permanent"."""
+    client, handler, _ = _handler("perm-then-transient")
 
     handler._handle_connack_packet(0x20, _connack(0, 135))  # not authorized
     await asyncio.sleep(0)
@@ -236,13 +233,9 @@ async def test_transient_refusal_after_permanent_one_clears_the_flag():
     await asyncio.sleep(0)
     assert not client.permanently_refused
 
-    handler._handle_disconnect_packet(MQTTCommands.DISCONNECT, b"")
-    await asyncio.sleep(0)
-    assert len(calls) == 2
-
 
 @pytest.mark.asyncio
-async def test_not_reconnecting_log_names_the_refusal(caplog):
+async def test_disconnect_log_names_the_permanent_refusal(caplog):
     """The CONNACK log never showed up in Sentry while this one did, so the
     refusal reason was lost; carry it here too."""
     _, handler, _ = _handler("perm-log")
@@ -252,8 +245,8 @@ async def test_not_reconnecting_log_names_the_refusal(caplog):
     caplog.clear()
     handler._handle_disconnect_packet(MQTTCommands.DISCONNECT, b"")
 
-    [record] = [r for r in caplog.records if "not reconnecting" in r.getMessage()]
-    assert "135" in record.getMessage()
+    [record] = [r for r in caplog.records if "permanent CONNACK refusal" in r.getMessage()]
+    assert "135" in record.getMessage() and record.levelname == "ERROR"
 
 
 @pytest.mark.asyncio
@@ -309,7 +302,7 @@ async def test_new_connection_waits_for_its_own_connack():
 
 
 @pytest.mark.asyncio
-async def test_reset_error_state_allows_reconnect_again():
+async def test_reset_error_state_clears_the_permanent_flag():
     """Fixing your credentials and calling connect() again must work."""
     _, handler, calls = _handler("reset")
 
@@ -318,7 +311,43 @@ async def test_reset_error_state_allows_reconnect_again():
     assert handler._permanent_failure
 
     handler.reset_error_state()
-    handler._handle_disconnect_packet(MQTTCommands.DISCONNECT, b"")
+
+    assert not handler.permanently_refused and not handler.has_error
+
+
+@pytest.mark.asyncio
+async def test_malformed_connack_reconnects_with_backoff():
+    """0.9 disconnected for good on code 10; the counter also reset before the
+    properties were parsed, so it never backed off."""
+    _, handler, calls = _handler("malformed")
+    reasons = []
+    handler.on_disconnect = reasons.append
+    bad = struct.pack("!BB", 0, 0) + bytes([1, 0xFF])  # one property byte with an unknown id
+
+    for _ in range(3):
+        handler._handle_connack_packet(0x20, bad)
     await asyncio.sleep(0)
 
-    assert calls == [True]
+    assert calls == [True] * 3
+    assert handler._connection_state.failed_connections == 3
+    assert [r.code for r in reasons] == [10] * 3
+
+
+@pytest.mark.asyncio
+async def test_cancelled_reconnect_logs_no_traceback(caplog):
+    """e.g. asyncio.run() cancels a reconnect still in its backoff at shutdown."""
+    client = gmqtt.Client("cancelled")
+    handler = client._package_handler
+
+    async def in_backoff(delay=False):
+        await asyncio.sleep(3600)
+
+    handler._reconnect_callback = in_backoff
+    handler._handle_disconnect_packet(MQTTCommands.DISCONNECT, b"")
+    await asyncio.sleep(0)
+    [task] = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
+    task.cancel()
+    await asyncio.sleep(0.01)  # the task ends, then its done-callbacks run
+
+    assert task.cancelled()
+    assert not [r for r in caplog.records if r.levelname in ("ERROR", "WARNING")]
