@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-11-11
+
 ### Changed
 - Auto-reconnect retries every refusal with the exponential backoff, as 0.7.0 did, instead of
   giving up on refusals that retrying alone cannot fix (bad credentials, banned, server moved,
@@ -103,7 +105,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 See the [tags](https://github.com/wialon/gmqtt/tags) and commit history.
 
-[Unreleased]: https://github.com/wialon/gmqtt/compare/v0.8.1...HEAD
+[Unreleased]: https://github.com/wialon/gmqtt/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/wialon/gmqtt/compare/85357a1...v0.10.0
+[0.9.0]: https://github.com/wialon/gmqtt/compare/v0.8.1...85357a1
 [0.8.1]: https://github.com/wialon/gmqtt/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/wialon/gmqtt/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/wialon/gmqtt/releases/tag/v0.7.0
