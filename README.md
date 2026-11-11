@@ -168,8 +168,12 @@ client.set_config({'reconnect_delay_max': 120})
 ```
 Note that manually calling `await client.disconnect()` will set `reconnect_retries` for 0, which will stop auto reconnect.
 
-A refusal that retrying cannot fix (bad credentials, banned client, ...) stops the reconnects; `client.permanently_refused`
-then turns `True` and `client.connect_error` holds the refusal.
+Every failure is retried, broker refusals included: even a refusal that retrying alone cannot fix (bad credentials,
+banned client, server moved, ...) may go away, and the backoff keeps the retries cheap. For those
+`client.permanently_refused` turns `True` and `client.connect_error` holds the refusal: alert on them.
+A failed `await client.connect(...)` raises the refusal, and auto-reconnect keeps trying meanwhile. Call
+`await client.disconnect()` before retrying `connect()` yourself or giving up: otherwise that background reconnect
+opens a second connection with the same client id.
 
 #### Rotating credentials
 If credentials expire (e.g. tokens), pass a `credentials_provider`. gmqtt awaits it before every connect and reconnect,
@@ -184,9 +188,7 @@ async def credentials(client, error):
 
 client = MQTTClient("client-id", credentials_provider=credentials)
 ```
-With a provider, auto-reconnect retries auth refusals (`134`/`135`, `4`/`5` on MQTT 3.1.1), as new credentials may succeed.
-An explicit `await client.connect(...)` still raises them, leaving the retry to the caller.
-Other permanent refusals still stop the reconnects, since new credentials cannot fix them.
+With a provider, auth refusals (`134`/`135`, `4`/`5` on MQTT 3.1.1) are routine: they do not set `permanently_refused`.
 
 ### Asynchronous on_message callback
 You can define asynchronous on_message callback.

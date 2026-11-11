@@ -104,7 +104,6 @@ class Client(SubscriptionsHandlerMixin):
             connection_lost_event=self._connection_lost,
             connection_state=self._connection_state,
             reconnect_callback=self.reconnect,
-            disconnect_callback=self.disconnect,
             resend_qos_callback=self._resend_qos_messages,
             clear_qos_callback=self._clear_resend_qos_queue,
             remove_message_callback=self._remove_message_from_queue,
@@ -128,7 +127,7 @@ class Client(SubscriptionsHandlerMixin):
         self._username = None
         self._password = None
         self._credentials_provider = credentials_provider
-        self._package_handler.retry_auth_refusals = credentials_provider is not None
+        self._package_handler.auth_refusals_renewable = credentials_provider is not None
         # The refusal last handed to the provider: it gets each refusal once.
         self._provider_seen_error = None
 
@@ -285,10 +284,10 @@ class Client(SubscriptionsHandlerMixin):
 
     @property
     def permanently_refused(self):
-        """True when the broker refused with a code auto-reconnect won't retry.
+        """True while the last refusal is one retrying alone cannot fix.
 
-        The client stays down until connect() is called again, typically after
-        fixing the credentials with set_auth_credentials().
+        Bad credentials, a ban, a moved server, ...: auto-reconnect still retries
+        them with backoff, as their cause may go away; this flag is what to alert on.
         """
         return self._package_handler.permanently_refused
 
@@ -393,34 +392,27 @@ class Client(SubscriptionsHandlerMixin):
         self._keepalive = keepalive
         self._is_active = True
 
-        # Fresh attempt: drop a previous refusal, which would suppress
-        # reconnects and raise a stale error below.
+        # Fresh attempt: drop a previous refusal, which would raise stale below.
         self._package_handler.reset_error_state()
 
         self._connection_state.protocol_version = version
 
-        # An auth refusal is raised to the caller below, who decides whether to
-        # retry; a background reconnect as well would race their connect().
-        self._package_handler.retry_auth_refusals = False
-        try:
-            self._connection = await self._create_connection(
-                host,
-                port=self._port,
-                ssl=self._ssl,
-                clean_session=self._clean_session,
-                keepalive=keepalive,
-            )
+        self._connection = await self._create_connection(
+            host,
+            port=self._port,
+            ssl=self._ssl,
+            clean_session=self._clean_session,
+            keepalive=keepalive,
+        )
 
-            await self._connection.auth(
-                self._client_id,
-                self._username,
-                self._password,
-                will_message=self._will_message,
-                **self._connect_properties
-            )
-            await self._connack_received.wait()
-        finally:
-            self._package_handler.retry_auth_refusals = self._credentials_provider is not None
+        await self._connection.auth(
+            self._client_id,
+            self._username,
+            self._password,
+            will_message=self._will_message,
+            **self._connect_properties
+        )
+        await self._connack_received.wait()
 
         await self._wait_qos_queue_drained()
 

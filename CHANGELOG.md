@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Auto-reconnect retries every refusal with the exponential backoff, as 0.7.0 did, instead of
+  giving up on refusals that retrying alone cannot fix (bad credentials, banned, server moved,
+  ...): their cause may go away. `client.permanently_refused` still tells them apart, now as
+  information to alert on, and the error logs say "reconnecting with backoff". With a
+  `credentials_provider`, auth refusals (`134`/`135`, `4`/`5` on MQTT 3.1.1) are routine and not
+  flagged: the provider renews the credentials for the next attempt.
+- A CONNACK with malformed properties (code 10) reconnects with backoff instead of disconnecting
+  for good. `on_disconnect` still receives the `MQTTConnectError(10)`.
+
+### Removed
+- The special retry of auth refusals for clients with a `credentials_provider`: all refusals are
+  retried now, and an explicit `connect()` raises a refusal while auto-reconnect carries on, as
+  in 0.7.0.
+
+### Fixed
+- A malformed CONNACK reset the failed-attempt counter, so its reconnects never backed off.
+- A reconnect cancelled in its backoff (e.g. when the event loop shuts down) logged
+  "Exception in callback" with a `CancelledError` traceback.
+
+## [0.9.0] - 2026-11-10
+
 ### Added
 - `credentials_provider` argument of `Client`: an `async (client, error) -> (username, password)`
   callable awaited before every connect and reconnect, for credentials that expire (e.g. tokens).
